@@ -6,10 +6,12 @@ import { driverApi, locationApi, trackDriver } from '../api/gateway';
 import { RideMap } from '../components/Map/RideMap';
 import { ChatWindow } from '../components/Chat/ChatWindow';
 import { showToast } from '../components/UI/Toast';
-import { RefreshCw, LogOut, CheckCircle, MessageCircle, Car } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { RefreshCw, LogOut, CheckCircle, MessageCircle, Car, Moon, Sun } from 'lucide-react';
 
 export function DriverPage() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [locations, setLocations] = useState([]);
   const [pendingRides, setPendingRides] = useState([]);
   const [activeRide, setActiveRide] = useState(null); // { ride_id, customer_name, pickup_lat, pickup_lng }
@@ -169,7 +171,9 @@ export function DriverPage() {
               }}>🧑</div>
               <div>
                 <div style={{ fontWeight: 'var(--weight-semibold)' }}>{activeRide.customer_name}</div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>Menunggu dijemput</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                  {activeRide.status === 'IN_PROGRESS' ? 'Dalam perjalanan' : 'Menunggu dijemput'}
+                </div>
               </div>
             </div>
           </div>
@@ -308,6 +312,10 @@ export function DriverPage() {
               🟢 {user?.username} — Online
             </div>
           </div>
+          <button onClick={toggleTheme} title="Toggle Theme"
+            style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4 }}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button onClick={logout} title="Logout"
             style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4 }}>
             <LogOut size={16} />

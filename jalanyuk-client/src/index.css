@@ -22,6 +22,28 @@ a { color: inherit; text-decoration: none; }
   --font-body:    'Plus Jakarta Sans', sans-serif;
   --font-mono:    'JetBrains Mono', monospace;
 
+  /* Common Semantic */
+  --color-success: #00D26A;
+  --color-warning: #FFB627;
+  --color-error:   #FF4757;
+  --color-info:    #3B82F6;
+
+  /* Ride Status */
+  --status-pending:     #FFB627;
+  --status-accepted:    #3B82F6;
+  --status-in-progress: #00D26A;
+  --status-completed:   #8B8B9E;
+  --status-cancelled:   #FF4757;
+
+  /* Map */
+  --map-route:   #00D26A;
+  --map-pickup:  #00D26A;
+  --map-dropoff: #FF4757;
+  --map-driver:  #3B82F6;
+}
+
+/* ─── Dark Theme (Default) ────────────────────────────── */
+:root, [data-theme="dark"] {
   /* Brand Colors */
   --brand-primary:        #00D26A;
   --brand-primary-light:  #33FF8C;
@@ -41,25 +63,46 @@ a { color: inherit; text-decoration: none; }
   --text-tertiary:  #4D4D63;
   --text-on-brand:  #0A0A0F;
 
-  /* Semantic */
-  --color-success: #00D26A;
-  --color-warning: #FFB627;
-  --color-error:   #FF4757;
-  --color-info:    #3B82F6;
+  /* Shadows */
+  --shadow-sm:   0 2px 4px rgba(0,0,0,0.2);
+  --shadow-md:   0 4px 16px rgba(0,0,0,0.3);
+  --shadow-lg:   0 8px 32px rgba(0,0,0,0.4);
+  --shadow-xl:   0 16px 48px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 24px var(--brand-primary-glow);
+  --border-glass: rgba(255,255,255,0.06);
+}
 
-  /* Ride Status */
-  --status-pending:     #FFB627;
-  --status-accepted:    #3B82F6;
-  --status-in-progress: #00D26A;
-  --status-completed:   #8B8B9E;
-  --status-cancelled:   #FF4757;
+/* ─── Light Theme ("Daylight Transit") ────────────────── */
+[data-theme="light"] {
+  /* Brand Colors */
+  --brand-primary:        #00B85C;
+  --brand-primary-light:  #00D26A;
+  --brand-primary-dark:   #008A45;
+  --brand-primary-glow:   rgba(0, 184, 92, 0.25);
 
-  /* Map */
-  --map-route:   #00D26A;
-  --map-pickup:  #00D26A;
-  --map-dropoff: #FF4757;
-  --map-driver:  #3B82F6;
+  /* Backgrounds */
+  --bg-base:     #F3F4F6;
+  --bg-surface:  #FFFFFF;
+  --bg-elevated: #F9FAFB;
+  --bg-glass:    rgba(255, 255, 255, 0.85);
+  --bg-glass-hover: rgba(255, 255, 255, 0.95);
 
+  /* Text */
+  --text-primary:   #0F172A;
+  --text-secondary: #64748B;
+  --text-tertiary:  #94A3B8;
+  --text-on-brand:  #FFFFFF;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 2px rgba(10, 10, 15, 0.05);
+  --shadow-md:   0 4px 6px -1px rgba(10, 10, 15, 0.05);
+  --shadow-lg:   0 10px 15px -3px rgba(10, 10, 15, 0.05);
+  --shadow-xl:   0 20px 25px -5px rgba(10, 10, 15, 0.05);
+  --shadow-glow: 0 0 24px var(--brand-primary-glow);
+  --border-glass: rgba(0, 0, 0, 0.05);
+}
+
+:root {
   /* Spacing */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
@@ -105,12 +148,7 @@ a { color: inherit; text-decoration: none; }
   --tracking-wide:    0.05em;
   --tracking-wider:   0.1em;
 
-  /* Shadows */
-  --shadow-sm:   0 2px 4px rgba(0,0,0,0.2);
-  --shadow-md:   0 4px 16px rgba(0,0,0,0.3);
-  --shadow-lg:   0 8px 32px rgba(0,0,0,0.4);
-  --shadow-xl:   0 16px 48px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 24px var(--brand-primary-glow);
+  /* Shadows removed from root, inside themes now */
 
   /* Easings */
   --ease-out:    cubic-bezier(0.0, 0.0, 0.2, 1);
@@ -158,7 +196,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
   transition: all 0.3s var(--ease-in-out);
@@ -494,7 +532,7 @@ a { color: inherit; text-decoration: none; }
 /* ─── Divider ─────────────────────────────────────────── */
 .divider {
   height: 1px;
-  background: rgba(255,255,255,0.05);
+  background: var(--border-glass);
   margin: var(--space-4) 0;
 }
 
@@ -533,7 +571,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-glass) !important;
   backdrop-filter: blur(12px);
   color: var(--text-primary) !important;
-  border: 1px solid rgba(255,255,255,0.06) !important;
+  border: 1px solid var(--border-glass) !important;
   width: 36px !important;
   height: 36px !important;
   line-height: 36px !important;
@@ -556,7 +594,7 @@ a { color: inherit; text-decoration: none; }
 .leaflet-popup-content-wrapper {
   background: var(--bg-glass) !important;
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  border: 1px solid var(--border-glass) !important;
   border-radius: var(--radius-lg) !important;
   color: var(--text-primary) !important;
   box-shadow: var(--shadow-xl) !important;

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useTheme } from '../../context/ThemeContext';
 
 // Fix default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -14,7 +15,8 @@ L.Icon.Default.mergeOptions({
 });
 
 const DARK_TILE = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const DARK_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+const LIGHT_TILE = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
 // Custom icons
 function createIcon(emoji, size = 32) {
@@ -67,13 +69,14 @@ export function RideMap({
   driverPos = null,
   flyTo = null,
 }) {
+  const [osrmRoute, setOsrmRoute] = useState([]);
+  const { theme } = useTheme();
   const route = [
     pickup && { lat: pickup.lat, lng: pickup.lng },
     ...waypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
     dropoff && { lat: dropoff.lat, lng: dropoff.lng },
   ].filter(Boolean);
 
-  const [osrmRoute, setOsrmRoute] = useState([]);
 
   useEffect(() => {
     if (route.length < 2) {
@@ -113,7 +116,7 @@ export function RideMap({
       style={{ height: '100%', width: '100%' }}
       zoomControl={true}
     >
-      <TileLayer url={DARK_TILE} attribution={DARK_ATTR} />
+      <TileLayer url={theme === 'dark' ? DARK_TILE : LIGHT_TILE} attribution={CARTO_ATTR} />
 
       {flyTo && <MapFlyTo center={[flyTo.lat, flyTo.lng]} />}
 

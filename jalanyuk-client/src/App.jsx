@@ -37,6 +37,8 @@ function AppContent() {
   );
 }
 
+import { ThemeProvider } from './context/ThemeContext';
+
 export default function App() {
   const [toast, setToast] = useState(null);
 
@@ -48,9 +50,11 @@ export default function App() {
   setToastFn(showToastFn);
 
   return (
-    <AuthProvider>
-      <InnerApp setToast={setToast} toast={toast} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <InnerApp setToast={setToast} toast={toast} />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -8,9 +8,10 @@ import { ChatWindow } from '../components/Chat/ChatWindow';
 import { showToast } from '../components/UI/Toast';
 import {
   MapPin, Flag, Plus, Trash2, Navigation, MessageCircle,
-  ChevronsRight, LogOut, History, X, RefreshCw,
+  ChevronsRight, LogOut, History, X, RefreshCw, Moon, Sun
 } from 'lucide-react';
 import logoImg from '../assets/logo.png';
+import { useTheme } from '../context/ThemeContext';
 
 const STATUS_LABELS = {
   PENDING: 'Mencari Driver',
@@ -22,6 +23,7 @@ const STATUS_LABELS = {
 
 export function CustomerPage() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   // Data
   const [locations, setLocations] = useState([]);
@@ -454,6 +456,10 @@ export function CustomerPage() {
               👤 {user?.username}
             </div>
           </div>
+          <button onClick={toggleTheme} title="Toggle Theme"
+            style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4 }}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button onClick={logout} title="Logout"
             style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4 }}>
             <LogOut size={16} />
