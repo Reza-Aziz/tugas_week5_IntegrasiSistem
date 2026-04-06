@@ -1,0 +1,84 @@
+syntax = "proto3";
+package jalanyuk.driver;
+
+service DriverService {
+    // Server-side streaming — push driver location to customer
+    rpc TrackDriver (TrackDriverRequest) returns (stream DriverLocation);
+    rpc AcceptRide (AcceptRideRequest) returns (AcceptRideResponse);
+    rpc ListPendingRides (ListPendingRidesRequest) returns (ListPendingRidesResponse);
+    rpc CompleteRide (CompleteRideRequest) returns (CompleteRideResponse);
+    rpc UpdateLocation (UpdateLocationRequest) returns (UpdateLocationResponse);
+    rpc PickupRide (PickupRideRequest) returns (PickupRideResponse);
+}
+
+message TrackDriverRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message DriverLocation {
+    double lat = 1;
+    double lng = 2;
+    double heading = 3;
+    double speed = 4;
+    string timestamp = 5;
+}
+
+message AcceptRideRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message AcceptRideResponse {
+    string message = 1;
+    string customer_name = 2;
+    double pickup_lat = 3;
+    double pickup_lng = 4;
+    double dropoff_lat = 5;
+    double dropoff_lng = 6;
+}
+
+message ListPendingRidesRequest {
+    string session_token = 1;
+}
+
+message ListPendingRidesResponse {
+    repeated PendingRide rides = 1;
+}
+
+message PendingRide {
+    string ride_id = 1;
+    string customer_name = 2;
+    string pickup_name = 3;
+    string dropoff_name = 4;
+    double distance_km = 5;
+    double total_price = 6;
+}
+
+message CompleteRideRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message CompleteRideResponse {
+    string message = 1;
+}
+
+message UpdateLocationRequest {
+    string session_token = 1;
+    double lat = 2;
+    double lng = 3;
+}
+
+message UpdateLocationResponse {
+    string message = 1;
+}
+
+message PickupRideRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message PickupRideResponse {
+    string message = 1;
+}

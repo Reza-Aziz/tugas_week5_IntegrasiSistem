@@ -1,0 +1,76 @@
+syntax = "proto3";
+package jalanyuk.ride;
+
+service RideService {
+    // Client-side streaming — customer streams waypoints
+    rpc RequestRide (stream RideRequest) returns (RideResponse);
+    rpc GetRideStatus (GetRideStatusRequest) returns (GetRideStatusResponse);
+    rpc ListRides (ListRidesRequest) returns (ListRidesResponse);
+    rpc CancelRide (CancelRideRequest) returns (CancelRideResponse);
+}
+
+message RideRequest {
+    oneof payload {
+        RideMetadata metadata = 1;
+        Waypoint waypoint = 2;
+    }
+}
+
+message RideMetadata {
+    string session_token = 1;
+    string pickup_location_id = 2;
+    string dropoff_location_id = 3;
+}
+
+message Waypoint {
+    double lat = 1;
+    double lng = 2;
+    string name = 3;
+}
+
+message RideResponse {
+    string ride_id = 1;
+    string status = 2;
+    double total_price = 3;
+    int32 waypoint_count = 4;
+    string message = 5;
+}
+
+message GetRideStatusRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message GetRideStatusResponse {
+    string ride_id = 1;
+    string status = 2;
+    string driver_name = 3;
+    double driver_lat = 4;
+    double driver_lng = 5;
+}
+
+message ListRidesRequest {
+    string session_token = 1;
+}
+
+message ListRidesResponse {
+    repeated RideSummary rides = 1;
+}
+
+message RideSummary {
+    string ride_id = 1;
+    string pickup_name = 2;
+    string dropoff_name = 3;
+    string status = 4;
+    double total_price = 5;
+    string created_at = 6;
+}
+
+message CancelRideRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message CancelRideResponse {
+    string message = 1;
+}

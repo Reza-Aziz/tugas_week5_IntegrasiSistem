@@ -1,0 +1,49 @@
+syntax = "proto3";
+package jalanyuk.location;
+
+service LocationService {
+    rpc ListLocations (ListLocationsRequest) returns (ListLocationsResponse);
+    rpc GetPricing (GetPricingRequest) returns (GetPricingResponse);
+    rpc SearchLocation (SearchLocationRequest) returns (SearchLocationResponse);
+}
+
+message Coordinate {
+    double lat = 1;
+    double lng = 2;
+}
+
+message Location {
+    string id = 1;
+    string name = 2;
+    string address = 3;
+    Coordinate coord = 4;
+    string category = 5;
+}
+
+message ListLocationsRequest {}
+
+message ListLocationsResponse {
+    repeated Location locations = 1;
+}
+
+message GetPricingRequest {
+    Coordinate origin = 1;
+    Coordinate destination = 2;
+    repeated Coordinate waypoints = 3;
+}
+
+message GetPricingResponse {
+    double distance_km = 1;
+    double base_price = 2;
+    double waypoint_surcharge = 3;
+    double total_price = 4;
+    string currency = 5;
+}
+
+message SearchLocationRequest {
+    string query = 1;
+}
+
+message SearchLocationResponse {
+    repeated Location results = 1;
+}

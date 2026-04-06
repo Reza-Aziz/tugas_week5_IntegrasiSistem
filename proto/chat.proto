@@ -1,0 +1,26 @@
+syntax = "proto3";
+package jalanyuk.chat;
+
+service ChatService {
+    // Bi-directional streaming
+    rpc Chat (stream ChatMessage) returns (stream ChatMessage);
+    rpc GetChatHistory (GetChatHistoryRequest) returns (GetChatHistoryResponse);
+}
+
+message ChatMessage {
+    string ride_id = 1;
+    string sender_id = 2;
+    string sender_name = 3;
+    string content = 4;
+    string timestamp = 5;
+    string session_token = 6;
+}
+
+message GetChatHistoryRequest {
+    string ride_id = 1;
+    string session_token = 2;
+}
+
+message GetChatHistoryResponse {
+    repeated ChatMessage messages = 1;
+}

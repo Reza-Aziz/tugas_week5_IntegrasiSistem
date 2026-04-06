@@ -1,0 +1,17 @@
+{
+  "name": "jalanyuk-server",
+  "version": "1.0.0",
+  "description": "JalanYuk gRPC Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@grpc/proto-loader": "^0.7.10",
+    "bcryptjs": "^2.4.3",
+    "node-sqlite3-wasm": "^0.8.20",
+    "uuid": "^9.0.0"
+  }
+}

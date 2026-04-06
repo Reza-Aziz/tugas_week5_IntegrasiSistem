@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.sqlite
+*.db
+.DS_Store
+dist/
+build/
+jalanyuk-client/node_modules/
+jalanyuk-client/dist/
+gateway/node_modules/
+server/node_modules/
