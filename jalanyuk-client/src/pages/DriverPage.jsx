@@ -55,8 +55,8 @@ export function DriverPage() {
     ? calcDistanceMeters(driverPos.lat, driverPos.lng, activeRide.dropoff_lat, activeRide.dropoff_lng)
     : Infinity;
 
-  // Use 150 meters to be safe against slight simulation offsets
-  const canComplete = activeRide?.status === 'IN_PROGRESS' && distMeters <= 150; 
+  // Use 300 meters to be safe against slight simulation offsets / OSRM parking issues
+  const canComplete = activeRide?.status === 'IN_PROGRESS' && distMeters <= 300; 
 
 
   useEffect(() => {

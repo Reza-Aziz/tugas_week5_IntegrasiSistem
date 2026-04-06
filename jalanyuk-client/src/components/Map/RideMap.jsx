@@ -19,7 +19,7 @@ const DARK_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM<
 // Custom icons
 function createIcon(emoji, size = 32) {
   return L.divIcon({
-    html: `<div style="font-size:${size}px;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6)); transition: transform 1.5s linear;">${emoji}</div>`,
+    html: `<div style="font-size:${size}px;line-height:1;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6));">${emoji}</div>`,
     className: 'driver-marker',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
@@ -47,12 +47,15 @@ const waypointIcon = () => createIcon('⭕', 28);
 const driverIcon = () => createIcon('🚗', 40);
 const locationIcon = () => createIcon('📌', 28);
 
-// Sub-component to fly to new center
-function MapFlyTo({ center, zoom }) {
+// Sub-component to pan to new center without changing zoom
+function MapFlyTo({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (center) map.flyTo(center, zoom, { duration: 1.5 });
-  }, [center?.[0], center?.[1], zoom, map]);
+    if (center) {
+      // Use panTo instead of flyTo to avoid messing up the user's manual zoom level
+      map.panTo(center, { animate: true, duration: 0.3 });
+    }
+  }, [center?.[0], center?.[1], map]);
   return null;
 }
 
@@ -101,18 +104,18 @@ export function RideMap({
 
   const center = flyTo
     ? [flyTo.lat, flyTo.lng]
-    : [-6.2088, 106.8456];
+    : [-7.282, 112.795];
 
   return (
     <MapContainer
-      center={[-6.2088, 106.8456]}
-      zoom={12}
+      center={[-7.282, 112.795]}
+      zoom={13}
       style={{ height: '100%', width: '100%' }}
       zoomControl={true}
     >
       <TileLayer url={DARK_TILE} attribution={DARK_ATTR} />
 
-      {flyTo && <MapFlyTo center={[flyTo.lat, flyTo.lng]} zoom={13} />}
+      {flyTo && <MapFlyTo center={[flyTo.lat, flyTo.lng]} />}
 
       {/* Popular Locations */}
       {locations.map((loc) => (

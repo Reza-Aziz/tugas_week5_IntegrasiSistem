@@ -83,8 +83,8 @@ function initSchema() {
       password TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('CUSTOMER', 'DRIVER')),
       session_token TEXT,
-      lat REAL DEFAULT -6.2088,
-      lng REAL DEFAULT 106.8456,
+      lat REAL DEFAULT -7.282,
+      lng REAL DEFAULT 112.795,
       status TEXT DEFAULT 'OFFLINE' CHECK(status IN ('ONLINE', 'OFFLINE', 'BUSY')),
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -136,14 +136,14 @@ function seedLocations() {
   if (row && row.c > 0) return;
 
   const locations = [
-    ['loc-01', 'Monas', 'Jl. Medan Merdeka, Jakarta Pusat', -6.1754, 106.8272, 'POPULAR'],
-    ['loc-02', 'Grand Indonesia', 'Jl. MH Thamrin, Jakarta Pusat', -6.1952, 106.8215, 'POPULAR'],
-    ['loc-03', 'Stasiun Gambir', 'Jl. Medan Merdeka Timur, Gambir', -6.1767, 106.8308, 'POPULAR'],
-    ['loc-04', 'Blok M Plaza', 'Jl. Sultan Hasanuddin, Kebayoran Baru', -6.2444, 106.7981, 'POPULAR'],
-    ['loc-05', 'Universitas Indonesia', 'Depok, Jawa Barat', -6.3638, 106.8269, 'POPULAR'],
-    ['loc-06', 'Bandara Soekarno-Hatta', 'Tangerang, Banten', -6.1256, 106.6558, 'POPULAR'],
-    ['loc-07', 'Ancol Dreamland', 'Jl. Lodan Timur, Ancol', -6.1247, 106.8456, 'POPULAR'],
-    ['loc-08', 'Senayan City', 'Jl. Asia Afrika, Gelora', -6.2273, 106.7973, 'POPULAR'],
+    ['loc-01', 'ITS (Gedung Rektorat)', 'Kampus ITS Sukolilo, Surabaya', -7.2823, 112.7949, 'POPULAR'],
+    ['loc-02', 'Dept. Teknik Informatika ITS', 'Gedung Informatika ITS, Surabaya', -7.2798, 112.7905, 'POPULAR'],
+    ['loc-03', 'Galaxy Mall Surabaya', 'Jl. Dharmahusada Indah Timur, Mulyorejo', -7.2754, 112.7820, 'POPULAR'],
+    ['loc-04', 'Pakuwon City Mall', 'Kejawan Putih Tambak, Mulyorejo', -7.2758, 112.8080, 'POPULAR'],
+    ['loc-05', 'Stasiun Gubeng', 'Pacar Keling, Tambaksari, Surabaya', -7.2655, 112.7520, 'POPULAR'],
+    ['loc-06', 'Tunjungan Plaza', 'Jl. Jenderal Basuki Rachmat, Surabaya', -7.2625, 112.7400, 'POPULAR'],
+    ['loc-07', 'Pantai Kenjeran Lama', 'Jl. Pantai Kenjeran, Bulak, Surabaya', -7.2405, 112.7975, 'POPULAR'],
+    ['loc-08', 'Bandara Internasional Juanda', 'Sidoarjo, Jawa Timur', -7.3795, 112.7830, 'POPULAR'],
   ];
 
   const insertTx = _db.transaction((locs) => {
@@ -154,7 +154,7 @@ function seedLocations() {
     }
   });
   insertTx(locations);
-  console.log('[DB] Seeded popular Jakarta locations');
+  console.log('[DB] Seeded popular Surabaya locations');
 }
 
 module.exports = { getDb };

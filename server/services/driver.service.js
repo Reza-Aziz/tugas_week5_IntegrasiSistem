@@ -92,7 +92,7 @@ async function trackDriver(call) {
     // PHASE 2: To Dropoff
     const routeToDropoff = await fetchOSRMRoute([pickup, ...waypoints, dropoff]);
     if (stateObj.cancelled) return;
-    await runSimulationPhase(routeToDropoff, onUpdate, 1500, stateObj);
+    await runSimulationPhase(routeToDropoff, onUpdate, 300, stateObj);
 
     if (stateObj.cancelled) return;
     console.log(`[Driver] Ride ${ride_id} reached dropoff. Waiting for completion...`);
