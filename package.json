@@ -1,0 +1,16 @@
+{
+  "name": "ride-hailing-grpc",
+  "version": "1.0.0",
+  "description": "Ride Hailing System with gRPC",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "client": "node customer-cli.js",
+    "driver": "node driver-cli.js",
+    "test": "node test-server.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.9.0",
+    "@grpc/proto-loader": "^0.7.9"
+  }
+}
