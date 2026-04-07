@@ -77,7 +77,15 @@ export function CustomerPage() {
           clearInterval(interval);
           if (data.status === 'COMPLETED') {
             showToast('🏁 Perjalanan selesai! Terima kasih.', 'success');
+          } else if (data.status === 'CANCELLED') {
+            showToast('❌ Perjalanan dibatalkan.', 'warning');
           }
+          setTimeout(() => {
+            setActiveRide(null);
+            setDriverPos(null);
+            if (trackCleanup) { trackCleanup(); setTrackCleanup(null); }
+            setView('booking');
+          }, 1500);
         }
       } catch {}
     }, 3000);
@@ -127,6 +135,11 @@ export function CustomerPage() {
         setDriverPos(null);
         setActiveRide((prev) => prev ? { ...prev, status: 'COMPLETED' } : prev);
         showToast('🏁 Driver telah sampai! Perjalanan selesai.', 'success');
+        setTimeout(() => {
+          setActiveRide(null);
+          setDriverPos(null);
+          setView('booking');
+        }, 1500);
       },
       (err) => console.error('[Track]', err)
     );
@@ -356,15 +369,9 @@ export function CustomerPage() {
           )}
 
           {/* Cancel */}
-          {!['COMPLETED', 'CANCELLED'].includes(activeRide.status) && (
+          {['PENDING', 'ACCEPTED'].includes(activeRide.status) && (
             <button className="btn-danger" onClick={cancelRide}>
               <X size={14} /> BATALKAN RIDE
-            </button>
-          )}
-
-          {['COMPLETED', 'CANCELLED'].includes(activeRide.status) && (
-            <button className="btn-primary" onClick={() => { setActiveRide(null); setDriverPos(null); setView('booking'); }}>
-              Pesan Lagi
             </button>
           )}
 

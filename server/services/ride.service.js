@@ -177,10 +177,10 @@ function cancelRide(call, callback) {
       return callback({ code: grpc.status.PERMISSION_DENIED, message: 'Tidak berwenang' });
     }
 
-    if (['COMPLETED', 'CANCELLED'].includes(ride.status)) {
+    if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(ride.status)) {
       return callback({
         code: grpc.status.FAILED_PRECONDITION,
-        message: 'Ride sudah selesai atau dibatalkan',
+        message: 'Ride tidak bisa dibatalkan karena sudah dalam perjalanan atau selesai',
       });
     }
 
