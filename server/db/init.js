@@ -137,7 +137,7 @@ function seedLocations() {
 
   const locations = [
     ['loc-01', 'ITS (Gedung Rektorat)', 'Kampus ITS Sukolilo, Surabaya', -7.2823, 112.7949, 'POPULAR'],
-    ['loc-02', 'Dept. Teknik Informatika ITS', 'Gedung Informatika ITS, Surabaya', -7.2798, 112.7905, 'POPULAR'],
+    ['loc-02', 'Gerbang Utama ITS', 'Jl. Arif Rahman Hakim, Sukolilo, Surabaya', -7.2798, 112.7905, 'POPULAR'],
     ['loc-03', 'Galaxy Mall Surabaya', 'Jl. Dharmahusada Indah Timur, Mulyorejo', -7.2754, 112.7820, 'POPULAR'],
     ['loc-04', 'Pakuwon City Mall', 'Kejawan Putih Tambak, Mulyorejo', -7.2758, 112.8080, 'POPULAR'],
     ['loc-05', 'Stasiun Gubeng', 'Pacar Keling, Tambaksari, Surabaya', -7.2655, 112.7520, 'POPULAR'],

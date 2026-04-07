@@ -30,6 +30,12 @@ message AcceptRideRequest {
     string session_token = 2;
 }
 
+message RideWaypoint {
+    double lat = 1;
+    double lng = 2;
+    string name = 3;
+}
+
 message AcceptRideResponse {
     string message = 1;
     string customer_name = 2;
@@ -37,6 +43,7 @@ message AcceptRideResponse {
     double pickup_lng = 4;
     double dropoff_lat = 5;
     double dropoff_lng = 6;
+    repeated RideWaypoint waypoints = 7;
 }
 
 message ListPendingRidesRequest {

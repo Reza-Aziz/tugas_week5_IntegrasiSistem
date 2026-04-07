@@ -150,7 +150,12 @@ function acceptRide(call, callback) {
 
     db.prepare("UPDATE users SET status = 'BUSY' WHERE id = ?").run(user.id);
 
-    console.log(`[Driver] ${user.username} accepted ride ${ride_id}`);
+    // Fetch customer-inputted waypoints to relay to driver's map
+    const dbWaypoints = db
+      .prepare('SELECT lat, lng, name FROM waypoints WHERE ride_id = ? ORDER BY order_index')
+      .all(ride_id);
+
+    console.log(`[Driver] ${user.username} accepted ride ${ride_id} (${dbWaypoints.length} waypoints)`);
 
     callback(null, {
       message: 'Ride berhasil diterima!',
@@ -159,6 +164,7 @@ function acceptRide(call, callback) {
       pickup_lng: ride.pickup_lng,
       dropoff_lat: ride.dropoff_lat,
       dropoff_lng: ride.dropoff_lng,
+      waypoints: dbWaypoints.map((w) => ({ lat: w.lat, lng: w.lng, name: w.name || '' })),
     });
   } catch (err) {
     console.error('[Driver] acceptRide error:', err);

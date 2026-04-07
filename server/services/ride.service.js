@@ -60,7 +60,7 @@ function requestRide(call, callback) {
     }
   });
 
-  call.on('end', () => {
+  call.on('end', async () => {
     if (!rideId || !pickupLoc || !dropoffLoc) {
       return callback({
         code: grpc.status.INVALID_ARGUMENT,
@@ -69,23 +69,52 @@ function requestRide(call, callback) {
     }
 
     try {
-      const pricing = calculatePrice(
+      const points = [
         { lat: pickupLoc.lat, lng: pickupLoc.lng },
+        ...waypoints,
         { lat: dropoffLoc.lat, lng: dropoffLoc.lng },
-        waypoints
-      );
+      ];
+
+      // Try OSRM for real road distance
+      let distanceKm = null;
+      try {
+        const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
+        const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+          distanceKm = data.routes[0].distance / 1000;
+          console.log(`[Ride] OSRM distance for ${rideId}: ${distanceKm.toFixed(2)} km`);
+        }
+      } catch (osrmErr) {
+        console.warn('[Ride] OSRM unavailable, falling back to Haversine');
+      }
+
+      // Fallback to Haversine
+      if (distanceKm === null) {
+        const pricing = calculatePrice(
+          { lat: pickupLoc.lat, lng: pickupLoc.lng },
+          { lat: dropoffLoc.lat, lng: dropoffLoc.lng },
+          waypoints
+        );
+        distanceKm = pricing.distance_km;
+      }
+
+      const { PRICING } = require('../utils/pricing');
+      const fare = PRICING.BASE_FARE + distanceKm * PRICING.PER_KM + waypoints.length * PRICING.WAYPOINT_SURCHARGE;
+      const totalPrice = Math.max(fare, PRICING.MIN_FARE);
 
       db.prepare("UPDATE rides SET total_price = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(pricing.total_price, rideId);
+        .run(totalPrice, rideId);
 
-      console.log(`[Ride] ${rideId} priced: Rp${pricing.total_price}, ${waypoints.length} waypoints`);
+      console.log(`[Ride] ${rideId} priced: Rp${totalPrice} (${distanceKm.toFixed(2)} km, ${waypoints.length} waypoints)`);
 
       callback(null, {
         ride_id: rideId,
         status: 'PENDING',
-        total_price: pricing.total_price,
+        total_price: totalPrice,
         waypoint_count: waypoints.length,
-        message: `Ride dipesan! Total Rp${Math.round(pricing.total_price).toLocaleString('id-ID')}`,
+        message: `Ride dipesan! Total Rp${Math.round(totalPrice).toLocaleString('id-ID')}`,
       });
     } catch (err) {
       console.error('[Ride] requestRide end error:', err);

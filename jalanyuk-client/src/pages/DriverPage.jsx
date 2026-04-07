@@ -97,7 +97,8 @@ export function DriverPage() {
         pickup_lng: data.pickup_lng,
         dropoff_lat: data.dropoff_lat,
         dropoff_lng: data.dropoff_lng,
-        status: 'ACCEPTED', // track status internally
+        waypoints: data.waypoints || [],
+        status: 'ACCEPTED',
       });
       setView('active');
       showToast(`✅ Ride diterima! Jemput ${data.customer_name}`, 'success');
@@ -351,7 +352,8 @@ export function DriverPage() {
         <RideMap
           locations={locations}
           pickup={driverPickup}
-          dropoff={activeRide?.dropoff_lat ? {lat: activeRide.dropoff_lat, lng: activeRide.dropoff_lng, name: 'Tujuan'} : null}
+          dropoff={activeRide?.dropoff_lat ? { lat: activeRide.dropoff_lat, lng: activeRide.dropoff_lng, name: 'Tujuan' } : null}
+          waypoints={activeRide?.waypoints || []}
           driverPos={driverPos}
           flyTo={driverPos || driverPickup}
         />
