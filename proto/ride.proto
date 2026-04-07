@@ -47,6 +47,11 @@ message GetRideStatusResponse {
     string driver_name = 3;
     double driver_lat = 4;
     double driver_lng = 5;
+    double pickup_lat = 6;
+    double pickup_lng = 7;
+    double dropoff_lat = 8;
+    double dropoff_lng = 9;
+    repeated Waypoint waypoints = 10;
 }
 
 message ListRidesRequest {

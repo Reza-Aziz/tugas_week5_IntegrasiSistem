@@ -152,9 +152,13 @@ function getRideStatus(call, callback) {
     }
 
     const ride = db.prepare(`
-      SELECT r.*, u.username as driver_name, u.lat as driver_lat, u.lng as driver_lng
+      SELECT r.*, u.username as driver_name, u.lat as driver_lat, u.lng as driver_lng,
+             lp.lat as pickup_lat, lp.lng as pickup_lng, lp.name as pickup_name,
+             ld.lat as dropoff_lat, ld.lng as dropoff_lng, ld.name as dropoff_name
       FROM rides r
       LEFT JOIN users u ON u.id = r.driver_id
+      JOIN locations lp ON lp.id = r.pickup_location_id
+      JOIN locations ld ON ld.id = r.dropoff_location_id
       WHERE r.id = ?
     `).get(ride_id);
 
@@ -162,12 +166,19 @@ function getRideStatus(call, callback) {
       return callback({ code: grpc.status.NOT_FOUND, message: 'Ride tidak ditemukan' });
     }
 
+    const waypoints = db.prepare('SELECT lat, lng, name FROM waypoints WHERE ride_id = ? ORDER BY order_index').all(ride_id);
+
     callback(null, {
       ride_id: ride.id,
       status: ride.status,
       driver_name: ride.driver_name || '',
       driver_lat: ride.driver_lat || 0,
       driver_lng: ride.driver_lng || 0,
+      pickup_lat: ride.pickup_lat,
+      pickup_lng: ride.pickup_lng,
+      dropoff_lat: ride.dropoff_lat,
+      dropoff_lng: ride.dropoff_lng,
+      waypoints: waypoints.map(w => ({ lat: w.lat, lng: w.lng, name: w.name || '' }))
     });
   } catch (err) {
     callback({ code: grpc.status.INTERNAL, message: 'Internal server error' });

@@ -69,10 +69,11 @@ export function CustomerPage() {
         const data = await rideApi.listRides(user.session_token);
         const active = data.rides?.find(r => ['PENDING', 'ACCEPTED', 'IN_PROGRESS'].includes(r.status));
         if (active) {
+          const fullData = await rideApi.getRide(active.ride_id, user.session_token);
           setActiveRide({
             ride_id: active.ride_id,
-            status: active.status,
-            total_price: active.total_price
+            total_price: active.total_price,
+            ...fullData
           });
           setView('tracking');
         }
@@ -556,11 +557,17 @@ export function CustomerPage() {
       <main style={{ position: 'relative', height: '100%' }}>
         <RideMap
           locations={locations}
-          pickup={pickupLoc ? { lat: pickupLoc.coord.lat, lng: pickupLoc.coord.lng, name: pickupLoc.name } : null}
-          dropoff={dropoffLoc ? { lat: dropoffLoc.coord.lat, lng: dropoffLoc.coord.lng, name: dropoffLoc.name } : null}
-          waypoints={waypoints}
+          pickup={
+            pickupLoc ? { lat: pickupLoc.coord.lat, lng: pickupLoc.coord.lng, name: pickupLoc.name } :
+            activeRide?.pickup_lat ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng, name: 'Titik Jemput' } : null
+          }
+          dropoff={
+            dropoffLoc ? { lat: dropoffLoc.coord.lat, lng: dropoffLoc.coord.lng, name: dropoffLoc.name } :
+            activeRide?.dropoff_lat ? { lat: activeRide.dropoff_lat, lng: activeRide.dropoff_lng, name: 'Tujuan' } : null
+          }
+          waypoints={waypoints.length > 0 ? waypoints : activeRide?.waypoints || []}
           driverPos={driverPos}
-          flyTo={driverPos || pickupLoc?.coord}
+          flyTo={driverPos || pickupLoc?.coord || (activeRide?.pickup_lat ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng } : null)}
         />
 
         {/* Floating status bubble on map when tracking */}
