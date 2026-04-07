@@ -7,7 +7,8 @@ service DriverService {
     rpc AcceptRide (AcceptRideRequest) returns (AcceptRideResponse);
     rpc ListPendingRides (ListPendingRidesRequest) returns (ListPendingRidesResponse);
     rpc CompleteRide (CompleteRideRequest) returns (CompleteRideResponse);
-    rpc UpdateLocation (UpdateLocationRequest) returns (UpdateLocationResponse);
+    // Client-side streaming — driver streams GPS coordinates continuously
+    rpc UpdateLocation (stream UpdateLocationRequest) returns (UpdateLocationResponse);
     rpc PickupRide (PickupRideRequest) returns (PickupRideResponse);
 }
 

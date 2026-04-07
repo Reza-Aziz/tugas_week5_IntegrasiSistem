@@ -273,21 +273,58 @@ function completeRide(call, callback) {
   }
 }
 
+// Client-side streaming: driver continuously streams GPS coordinates
 function updateLocation(call, callback) {
   const db = getDb();
-  const { session_token, lat, lng } = call.request;
+  let currentUser = null;
+  let updateCount = 0;
+  let lastLat = null;
+  let lastLng = null;
 
-  try {
-    const user = validateToken(session_token);
-    if (!user) {
+  call.on('data', (message) => {
+    try {
+      // Authenticate on first message
+      if (!currentUser) {
+        currentUser = validateToken(message.session_token);
+        if (!currentUser) {
+          call.destroy({
+            code: grpc.status.UNAUTHENTICATED,
+            message: 'Session tidak valid',
+          });
+          return;
+        }
+        console.log(`[Driver] ${currentUser.username} started location streaming`);
+      }
+
+      lastLat = message.lat;
+      lastLng = message.lng;
+      updateCount++;
+
+      // Persist every update to DB
+      db.prepare('UPDATE users SET lat = ?, lng = ? WHERE id = ?')
+        .run(lastLat, lastLng, currentUser.id);
+
+      console.log(
+        `[Driver] Location update #${updateCount} from ${currentUser.username}: (${lastLat.toFixed(5)}, ${lastLng.toFixed(5)})`
+      );
+    } catch (err) {
+      console.error('[Driver] updateLocation stream error:', err);
+    }
+  });
+
+  call.on('end', () => {
+    if (!currentUser) {
       return callback({ code: grpc.status.UNAUTHENTICATED, message: 'Session tidak valid' });
     }
+    console.log(`[Driver] ${currentUser.username} ended location stream — ${updateCount} updates sent`);
+    callback(null, {
+      message: `Streaming selesai. ${updateCount} lokasi berhasil diperbarui`,
+    });
+  });
 
-    db.prepare('UPDATE users SET lat = ?, lng = ? WHERE id = ?').run(lat, lng, user.id);
-    callback(null, { message: 'Lokasi diperbarui' });
-  } catch (err) {
-    callback({ code: grpc.status.INTERNAL, message: 'Internal server error' });
-  }
+  call.on('error', (err) => {
+    console.error('[Driver] updateLocation stream error:', err.message);
+  });
 }
 
 module.exports = { trackDriver, acceptRide, pickupRide, listPendingRides, completeRide, updateLocation };
