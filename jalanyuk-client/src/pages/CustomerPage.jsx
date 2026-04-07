@@ -62,6 +62,25 @@ export function CustomerPage() {
     }).then(setPricing).catch(() => {});
   }, [pickup, dropoff, waypoints, locations]);
 
+  /* ─ Load active ride on mount ───────────────────── */
+  useEffect(() => {
+    async function initActiveRide() {
+      try {
+        const data = await rideApi.listRides(user.session_token);
+        const active = data.rides?.find(r => ['PENDING', 'ACCEPTED', 'IN_PROGRESS'].includes(r.status));
+        if (active) {
+          setActiveRide({
+            ride_id: active.ride_id,
+            status: active.status,
+            total_price: active.total_price
+          });
+          setView('tracking');
+        }
+      } catch (err) {}
+    }
+    initActiveRide();
+  }, [user.session_token]);
+
   /* ─ Poll ride status when activeRide exists ─────── */
   useEffect(() => {
     if (!activeRide || ['COMPLETED', 'CANCELLED'].includes(activeRide.status)) return;
@@ -124,12 +143,13 @@ export function CustomerPage() {
 
   /* ─ Start SSE tracking ──────────────────────────── */
   function startTracking(rideId) {
+    if (trackCleanup) { trackCleanup(); }
+    
     const cleanup = trackDriver(
       rideId,
       user.session_token,
       (loc) => {
         setDriverPos(loc);
-        setActiveRide((prev) => prev ? { ...prev, status: 'IN_PROGRESS' } : prev);
       },
       () => {
         setDriverPos(null);
@@ -145,6 +165,16 @@ export function CustomerPage() {
     );
     setTrackCleanup(() => cleanup);
   }
+
+  // Ensure trackCleanup is called on unmount to prevent duplicated tracking loops (flickering)
+  useEffect(() => {
+    return () => {
+      if (trackCleanup) {
+        trackCleanup();
+      }
+    };
+  }, [trackCleanup]);
+
 
   /* ─ Cancel ride ─────────────────────────────────── */
   async function cancelRide() {
@@ -296,11 +326,17 @@ export function CustomerPage() {
             </div>
           )}
 
+          {activeRide && (
+            <div className="glass-card" style={{ padding: 'var(--space-3)', borderColor: 'var(--color-warning)', marginTop: 'auto', marginBottom: 'var(--space-2)' }}>
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-warning)' }}>⚠️ Anda sedang memiliki pesanan aktif.</span>
+            </div>
+          )}
+
           <button
             className="btn-primary"
             onClick={bookRide}
-            disabled={loadingBook || !pickup || !dropoff}
-            style={{ padding: 'var(--space-4)', marginTop: 'auto' }}
+            disabled={loadingBook || !pickup || !dropoff || !!activeRide}
+            style={{ padding: 'var(--space-4)', marginTop: activeRide ? '0' : 'auto' }}
           >
             {loadingBook
               ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Memesan...</>

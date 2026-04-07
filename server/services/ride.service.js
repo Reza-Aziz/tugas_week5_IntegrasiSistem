@@ -28,6 +28,20 @@ function requestRide(call, callback) {
         }
 
         customerId = user.id;
+
+        // Cek apakah customer sudah dalam ride aktif
+        const existingRide = db.prepare(
+          `SELECT id FROM rides WHERE customer_id = ? AND status IN ('PENDING', 'ACCEPTED', 'IN_PROGRESS')`
+        ).get(customerId);
+
+        if (existingRide) {
+          call.destroy({
+            code: grpc.status.FAILED_PRECONDITION,
+            message: 'Kamu masih memiliki ride yang aktif. Selesaikan atau batalkan ride sebelumnya terlebih dahulu.',
+          });
+          return;
+        }
+
         rideId = uuidv4();
 
         pickupLoc = db.prepare('SELECT * FROM locations WHERE id = ?').get(meta.pickup_location_id);

@@ -207,7 +207,7 @@ function pickupRide(call, callback) {
   }
 }
 
-function listPendingRides(call, callback) {
+async function listPendingRides(call, callback) {
   const db = getDb();
   const { session_token } = call.request;
 
@@ -234,23 +234,55 @@ function listPendingRides(call, callback) {
 
     const { calculateDistance } = require('../utils/pricing');
 
-    const pendingRides = rides.map((r) => ({
-      ride_id: r.ride_id,
-      customer_name: r.customer_name,
-      pickup_name: r.pickup_name,
-      dropoff_name: r.dropoff_name,
-      distance_km: calculateDistance(
+    const pendingRides = await Promise.all(rides.map(async (r) => {
+      // Fetch waypoints for this ride to calculate proper through-waypoint distance
+      const wps = db
+        .prepare('SELECT lat, lng FROM waypoints WHERE ride_id = ? ORDER BY order_index')
+        .all(r.ride_id);
+
+      const points = [
         { lat: r.pickup_lat, lng: r.pickup_lng },
-        { lat: r.dropoff_lat, lng: r.dropoff_lng }
-      ),
-      total_price: r.total_price,
+        ...wps,
+        { lat: r.dropoff_lat, lng: r.dropoff_lng },
+      ];
+
+      let distanceKm = null;
+      try {
+        const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
+        const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes.length > 0) {
+          distanceKm = data.routes[0].distance / 1000;
+        }
+      } catch (osrmErr) {
+        console.warn(`[Driver] OSRM unavailable for ride ${r.ride_id}, falling back to Haversine`);
+      }
+
+      if (distanceKm === null) {
+        distanceKm = 0;
+        for (let i = 0; i < points.length - 1; i++) {
+          distanceKm += calculateDistance(points[i], points[i + 1]);
+        }
+      }
+
+      return {
+        ride_id: r.ride_id,
+        customer_name: r.customer_name,
+        pickup_name: r.pickup_name,
+        dropoff_name: r.dropoff_name,
+        distance_km: Math.round(distanceKm * 100) / 100,
+        total_price: r.total_price,
+      };
     }));
 
     callback(null, { rides: pendingRides });
   } catch (err) {
+    console.error('[Driver] listPendingRides error:', err);
     callback({ code: grpc.status.INTERNAL, message: 'Internal server error' });
   }
 }
+
 
 function completeRide(call, callback) {
   const db = getDb();

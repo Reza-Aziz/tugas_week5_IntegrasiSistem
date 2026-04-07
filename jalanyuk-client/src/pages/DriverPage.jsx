@@ -261,7 +261,7 @@ export function DriverPage() {
                       {formatPrice(ride.total_price)}
                     </div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                      📏 {ride.distance_km.toFixed(1)} km
+                      📏 {ride.distance_km.toFixed(2)} km
                     </div>
                   </div>
                 </div>
