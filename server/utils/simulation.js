@@ -30,7 +30,7 @@ async function fetchOSRMRoute(points) {
   const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
   
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
     const data = await res.json();
     if (data.routes && data.routes.length > 0) {
       const rawGeometry = data.routes[0].geometry.coordinates.map(coord => ({ lat: coord[1], lng: coord[0] }));

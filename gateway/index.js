@@ -193,37 +193,7 @@ app.post('/api/driver/complete/:rideId', (req, res) => {
   });
 });
 
-// Server-Sent Events for TrackDriver (server streaming)
-app.get('/api/driver/track/:rideId', (req, res) => {
-  const token = req.query.token;
-  const rideId = req.params.rideId;
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.flushHeaders();
-
-  const call = driverClient.TrackDriver({ ride_id: rideId, session_token: token });
-
-  call.on('data', (location) => {
-    res.write(`data: ${JSON.stringify(location)}\n\n`);
-  });
-
-  call.on('end', () => {
-    res.write(`data: ${JSON.stringify({ type: 'END' })}\n\n`);
-    res.end();
-  });
-
-  call.on('error', (err) => {
-    res.write(`data: ${JSON.stringify({ type: 'ERROR', message: err.message })}\n\n`);
-    res.end();
-  });
-
-  req.on('close', () => {
-    call.cancel();
-  });
-});
+// Note: Driver Tracking has been migrated to WebSocket (/ws/driver)
 
 // ─── Chat Routes ───────────────────────────────────────────────────────────
 
@@ -238,10 +208,29 @@ app.get('/api/chat/history/:rideId', (req, res) => {
 // ─── HTTP + WebSocket Server ───────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws/chat' });
+
+const wssChat = new WebSocket.Server({ noServer: true });
+const wssDriver = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  // Use a dummy base URL since we only care about pathname
+  const pathname = new URL(request.url, 'http://localhost').pathname;
+
+  if (pathname === '/ws/chat') {
+    wssChat.handleUpgrade(request, socket, head, (ws) => {
+      wssChat.emit('connection', ws, request);
+    });
+  } else if (pathname === '/ws/driver') {
+    wssDriver.handleUpgrade(request, socket, head, (ws) => {
+      wssDriver.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
 // WebSocket → gRPC bidirectional streaming
-wss.on('connection', (ws, req) => {
+wssChat.on('connection', (ws, req) => {
   console.log('[WS] New chat connection');
 
   const grpcCall = chatClient.Chat();
@@ -280,11 +269,56 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+wssDriver.on('connection', (ws, req) => {
+  console.log('[WS] New driver tracking connection');
+  let grpcCall = null;
+  let closed = false;
+
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'START_TRACKING' && msg.ride_id && msg.session_token) {
+        grpcCall = driverClient.TrackDriver({ ride_id: msg.ride_id, session_token: msg.session_token });
+        
+        grpcCall.on('data', (location) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(location));
+          }
+        });
+
+        grpcCall.on('end', () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'END' }));
+            ws.close();
+          }
+        });
+
+        grpcCall.on('error', (err) => {
+          console.error('[WS→gRPC] Tracking error:', err.message);
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: err.message }));
+            ws.close();
+          }
+        });
+      }
+    } catch (e) {
+      console.error('[WS] Invalid tracker message:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    closed = true;
+    if (grpcCall) grpcCall.cancel();
+    console.log('[WS] Driver tracking connection closed');
+  });
+});
+
 const PORT = process.env.GATEWAY_PORT || 3000;
 server.listen(PORT, () => {
   console.log('╔══════════════════════════════════════╗');
   console.log('║   JalanYuk Express Gateway Running   ║');
   console.log(`║   HTTP: http://localhost:${PORT}         ║`);
   console.log(`║   WS:   ws://localhost:${PORT}/ws/chat   ║`);
+  console.log(`║   WS:   ws://localhost:${PORT}/ws/driver ║`);
   console.log('╚══════════════════════════════════════╝');
 });

@@ -1,27 +1,27 @@
 # JalanYuk 🛵
 
-> Aplikasi ride-hailing berbasis **gRPC** — dibuat untuk tugas *Integrasi Sistem* Semester 4.
+> Aplikasi ride-hailing berbasis **gRPC** — dibuat untuk tugas _Integrasi Sistem_ Semester 4.
 
 ## Tech Stack
 
-| Layer | Teknologi |
-|---|---|
-| Protocol | gRPC (`@grpc/grpc-js`) |
-| Backend | Node.js gRPC Server (monolith) |
-| Gateway | Express.js REST→gRPC bridge |
-| Frontend | React (Vite) + Leaflet.js |
-| Database | SQLite (`better-sqlite3`) |
+| Layer     | Teknologi                                           |
+| --------- | --------------------------------------------------- |
+| Protocol  | gRPC (`@grpc/grpc-js`)                              |
+| Backend   | Node.js gRPC Server (monolith)                      |
+| Gateway   | Express.js REST→gRPC bridge                         |
+| Frontend  | React (Vite) + Leaflet.js                           |
+| Database  | SQLite (`better-sqlite3`)                           |
 | Streaming | SSE (Server-Streaming) + WebSocket (Bidi-Streaming) |
 
 ## gRPC Services
 
-| Service | RPCs | Streaming Type |
-|---|---|---|
-| **AuthService** | Register, Login, Logout | Unary |
-| **LocationService** | ListLocations, GetPricing, SearchLocation | Unary |
-| **RideService** | RequestRide, GetRideStatus, ListRides, CancelRide | **Client-side Streaming** |
-| **DriverService** | TrackDriver, AcceptRide, ListPendingRides, CompleteRide | **Server-side Streaming** |
-| **ChatService** | Chat, GetChatHistory | **Bi-directional Streaming** |
+| Service             | RPCs                                                    | Streaming Type               |
+| ------------------- | ------------------------------------------------------- | ---------------------------- |
+| **AuthService**     | Register, Login, Logout                                 | Unary                        |
+| **LocationService** | ListLocations, GetPricing, SearchLocation               | Unary                        |
+| **RideService**     | RequestRide, GetRideStatus, ListRides, CancelRide       | **Client-side Streaming**    |
+| **DriverService**   | TrackDriver, AcceptRide, ListPendingRides, CompleteRide | **Server-side Streaming**    |
+| **ChatService**     | Chat, GetChatHistory                                    | **Bi-directional Streaming** |
 
 ## Cara Menjalankan
 
@@ -76,7 +76,7 @@ Frontend berjalan di `http://localhost:5173`
 5. ✅ Driver accept ride → Customer menerima notifikasi
 6. 📡 **Server-streaming**: Driver bergerak di map customer real-time
 7. 💬 **Bidi-streaming**: Customer ↔ Driver chat
-8. 🏁 Driver complete ride
+8. 🏁 Driver complete rideJ
 
 ## Project Structure
 

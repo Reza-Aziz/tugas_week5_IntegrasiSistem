@@ -250,7 +250,7 @@ async function listPendingRides(call, callback) {
       try {
         const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
         const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
         const data = await res.json();
         if (data.routes && data.routes.length > 0) {
           distanceKm = data.routes[0].distance / 1000;

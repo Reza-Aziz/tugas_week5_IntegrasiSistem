@@ -57,31 +57,36 @@ export const driverApi = {
     apiFetch(`/api/driver/complete/${rideId}`, { method: 'POST', body: JSON.stringify({ session_token: token }) }, token),
 };
 
-// ─── TrackDriver — SSE (Server-Sent Events) ──────────────────────────────────
+// ─── TrackDriver — WebSocket Bridge ──────────────────────────────────────────
 
 export function trackDriver(rideId, token, onLocation, onEnd, onError) {
-  const url = `${BASE_URL}/api/driver/track/${rideId}?token=${encodeURIComponent(token)}`;
-  const es = new EventSource(url);
+  const WS_DRIVER_URL = import.meta.env.VITE_WS_DRIVER_URL || 'ws://localhost:3000/ws/driver';
+  const ws = new WebSocket(WS_DRIVER_URL);
 
-  es.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (data.type === 'END') {
-      es.close();
-      onEnd?.();
-    } else if (data.type === 'ERROR') {
-      es.close();
-      onError?.(data.message);
-    } else {
-      onLocation?.(data);
-    }
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'START_TRACKING', ride_id: rideId, session_token: token }));
   };
 
-  es.onerror = (err) => {
-    es.close();
-    onError?.('Connection lost');
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'END') {
+        ws.close();
+        onEnd?.();
+      } else if (data.type === 'ERROR') {
+        ws.close();
+        onError?.(data.message);
+      } else {
+        onLocation?.(data);
+      }
+    } catch (err) {}
   };
 
-  return () => es.close();
+  ws.onerror = (err) => {
+    onError?.('WebSocket connection error');
+  };
+
+  return () => ws.close();
 }
 
 // ─── Chat — WebSocket (bidirectional streaming) ──────────────────────────────
