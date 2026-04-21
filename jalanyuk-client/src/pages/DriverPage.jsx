@@ -29,7 +29,7 @@ export function DriverPage() {
         activeRide.ride_id,
         user.session_token,
         (loc) => setDriverPos(loc),
-        () => setDriverPos(null),
+        () => console.log('[DriverPage] Tracking ended, keeping last position'),
         (err) => console.error(err)
       );
       setTrackCleanup(() => cleanup);

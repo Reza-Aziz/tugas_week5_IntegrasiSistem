@@ -79,29 +79,68 @@ async function getPricing(call, callback) {
   }
 }
 
-function searchLocation(call, callback) {
+async function searchLocation(call, callback) {
   const db = getDb();
   const { query } = call.request;
   try {
     if (!query || query.trim().length < 2) {
       return callback(null, { results: [] });
     }
-    const rows = db
-      .prepare(
-        "SELECT * FROM locations WHERE name LIKE ? OR address LIKE ? LIMIT 10"
-      )
-      .all(`%${query}%`, `%${query}%`);
 
-    const results = rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      address: r.address || '',
-      coord: { lat: r.lat, lng: r.lng },
-      category: r.category,
-    }));
+    // Bounding box for East Java (Jawa Timur): 110.89,-6.74 to 114.63,-8.78
+    const viewbox = '110.89,-6.74,114.63,-8.78';
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&viewbox=${viewbox}&bounded=1&limit=8`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'JalanYuk-App/1.0 (IntegrationSystem Project)'
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      return callback(null, { results: [] });
+    }
+
+    const results = [];
+
+    const insertTx = db.transaction((locs) => {
+      for (const loc of locs) {
+        db.prepare(
+          'INSERT OR IGNORE INTO locations (id, name, address, lat, lng, category) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(loc.id, loc.name, loc.address, loc.coord.lat, loc.coord.lng, loc.category);
+      }
+    });
+
+    for (const item of data) {
+      if (!item.place_id || !item.lat || !item.lon) continue;
+
+      const id = `osm_${item.osm_type}_${item.osm_id}`;
+      // Extract a short name from the display_name, usually the first segment
+      const name = item.name || item.display_name.split(',')[0];
+      
+      const loc = {
+        id,
+        name,
+        address: item.display_name,
+        coord: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
+        category: 'SEARCH_RESULT',
+      };
+      
+      results.push(loc);
+    }
+
+    // Save fetched dynamic locations to DB so requestRide can reference their IDs
+    if (results.length > 0) {
+      insertTx(results);
+    }
+
     callback(null, { results });
   } catch (err) {
-    callback({ code: grpc.status.INTERNAL, message: 'Internal server error' });
+    console.error('[Location] Nominatim search error:', err);
+    callback({ code: grpc.status.INTERNAL, message: 'Internal server error during search' });
   }
 }
 

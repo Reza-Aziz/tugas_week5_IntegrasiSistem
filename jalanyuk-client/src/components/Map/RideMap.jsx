@@ -120,22 +120,7 @@ export function RideMap({
 
       {flyTo && <MapFlyTo center={[flyTo.lat, flyTo.lng]} />}
 
-      {/* Popular Locations */}
-      {locations.map((loc) => (
-        <Marker
-          key={loc.id}
-          position={[loc.coord.lat, loc.coord.lng]}
-          icon={locationIcon()}
-        >
-          <Popup>
-            <div style={{ color: '#0A0A0F', fontWeight: 600, minWidth: 140 }}>
-              📍 {loc.name}
-              <br />
-              <small style={{ color: '#555', fontWeight: 400 }}>{loc.address}</small>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+
 
       {/* Pickup Marker */}
       {pickup && (

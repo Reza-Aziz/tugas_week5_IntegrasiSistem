@@ -33,6 +33,17 @@ export function CustomerPage() {
   const [wpForm, setWpForm] = useState({ lat: '', lng: '', name: '' });
   const [pricing, setPricing] = useState(null);
 
+  // Autocomplete states
+  const [pickupQuery, setPickupQuery] = useState('');
+  const [pickupResults, setPickupResults] = useState([]);
+  const [isPickupOpen, setIsPickupOpen] = useState(false);
+  const [pickupLoading, setPickupLoading] = useState(false);
+
+  const [dropoffQuery, setDropoffQuery] = useState('');
+  const [dropoffResults, setDropoffResults] = useState([]);
+  const [isDropoffOpen, setIsDropoffOpen] = useState(false);
+  const [dropoffLoading, setDropoffLoading] = useState(false);
+
   // State
   const [view, setView] = useState('booking'); // 'booking' | 'tracking' | 'history' | 'chat'
   const [activeRide, setActiveRide] = useState(null);
@@ -49,7 +60,6 @@ export function CustomerPage() {
     locationApi.list().then((d) => setLocations(d.locations || [])).catch(() => {});
   }, []);
 
-  /* ─ Get pricing when pickup/dropoff changes ─────── */
   useEffect(() => {
     if (!pickup || !dropoff) { setPricing(null); return; }
     const pLoc = locations.find((l) => l.id === pickup);
@@ -62,6 +72,56 @@ export function CustomerPage() {
       waypoints: waypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
     }).then(setPricing).catch(() => {});
   }, [pickup, dropoff, waypoints, locations]);
+
+  /* ─ Search Autocomplete Hooks ─────────────────────── */
+  useEffect(() => {
+    if (pickupQuery.length < 3) {
+      if (pickupQuery.length === 0) setPickup('');
+      setPickupResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setPickupLoading(true);
+      locationApi.search(pickupQuery).then(res => {
+        setPickupResults(res.results || []);
+        setIsPickupOpen(true);
+      }).catch(() => {}).finally(() => setPickupLoading(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [pickupQuery]);
+
+  useEffect(() => {
+    if (dropoffQuery.length < 3) {
+      if (dropoffQuery.length === 0) setDropoff('');
+      setDropoffResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDropoffLoading(true);
+      locationApi.search(dropoffQuery).then(res => {
+        setDropoffResults(res.results || []);
+        setIsDropoffOpen(true);
+      }).catch(() => {}).finally(() => setDropoffLoading(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [dropoffQuery]);
+
+  const handleSelectLocation = (loc, type) => {
+    setLocations(prev => {
+      if (!prev.find(l => l.id === loc.id)) return [...prev, loc];
+      return prev;
+    });
+
+    if (type === 'pickup') {
+      setPickup(loc.id);
+      setPickupQuery(loc.name);
+      setIsPickupOpen(false);
+    } else {
+      setDropoff(loc.id);
+      setDropoffQuery(loc.name);
+      setIsDropoffOpen(false);
+    }
+  };
 
   /* ─ Load active ride on mount ───────────────────── */
   useEffect(() => {
@@ -84,6 +144,18 @@ export function CustomerPage() {
   }, [user.session_token]);
 
   /* ─ Event-Driven Status & Surge (WebSocket Push) ────────────────── */
+  const isFirstSurgeRef = useRef(true);
+  const activeRideRef = useRef(activeRide);
+  const hasBothPointsRef = useRef(false);
+
+  useEffect(() => {
+    activeRideRef.current = activeRide;
+  }, [activeRide]);
+
+  useEffect(() => {
+    hasBothPointsRef.current = !!(pickup && dropoff);
+  }, [pickup, dropoff]);
+
   useEffect(() => {
     if (!user) return;
     eventsRef.current = connectGlobalEvents({
@@ -91,7 +163,13 @@ export function CustomerPage() {
       role: 'CUSTOMER',
       onSurge: (multiplier) => {
         setSurge((prev) => {
-          if (multiplier > prev) showToast('⚠️ Harga berubah karena permintaan tinggi!', 'warning');
+          if (isFirstSurgeRef.current) {
+            isFirstSurgeRef.current = false;
+            return multiplier;
+          }
+          if (!activeRideRef.current && hasBothPointsRef.current && multiplier > prev) {
+            showToast('⚠️ Harga berubah karena permintaan tinggi!', 'warning');
+          }
           return multiplier;
         });
       },
@@ -251,24 +329,60 @@ export function CustomerPage() {
             </p>
           </div>
 
-          <div className="input-group">
+          <div className="input-group" style={{ position: 'relative' }}>
             <label className="input-label">📍 Titik Jemput</label>
-            <select className="select-field" value={pickup} onChange={(e) => setPickup(e.target.value)}>
-              <option value="">-- Pilih lokasi --</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <input 
+              className="input-field" 
+              placeholder="Cari stasiun, mall, jalan..."
+              value={pickupQuery}
+              onChange={(e) => setPickupQuery(e.target.value)}
+              onFocus={() => { if (pickupResults.length > 0) setIsPickupOpen(true); }}
+              onBlur={() => setTimeout(() => setIsPickupOpen(false), 200)}
+            />
+            {pickupLoading && <span style={{ position: 'absolute', right: '12px', top: '34px', fontSize: 12 }}>⏳</span>}
+            {isPickupOpen && pickupResults.length > 0 && (
+              <div className="autocomplete-dropdown glass-card" style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                maxHeight: 200, overflowY: 'auto', padding: '8px 0', marginTop: 4, display: 'flex', flexDirection: 'column'
+              }}>
+                {pickupResults.map(l => (
+                  <div key={l.id} className="autocomplete-item"
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                    onClick={() => handleSelectLocation(l, 'pickup')}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{l.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.address}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="input-group">
+          <div className="input-group" style={{ position: 'relative' }}>
             <label className="input-label">🏁 Tujuan</label>
-            <select className="select-field" value={dropoff} onChange={(e) => setDropoff(e.target.value)}>
-              <option value="">-- Pilih lokasi --</option>
-              {locations.filter((l) => l.id !== pickup).map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <input 
+              className="input-field" 
+              placeholder="Cari stasiun, mall, jalan..."
+              value={dropoffQuery}
+              onChange={(e) => setDropoffQuery(e.target.value)}
+              onFocus={() => { if (dropoffResults.length > 0) setIsDropoffOpen(true); }}
+              onBlur={() => setTimeout(() => setIsDropoffOpen(false), 200)}
+            />
+            {dropoffLoading && <span style={{ position: 'absolute', right: '12px', top: '34px', fontSize: 12 }}>⏳</span>}
+            {isDropoffOpen && dropoffResults.length > 0 && (
+              <div className="autocomplete-dropdown glass-card" style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                maxHeight: 200, overflowY: 'auto', padding: '8px 0', marginTop: 4, display: 'flex', flexDirection: 'column'
+              }}>
+                {dropoffResults.map(l => (
+                  <div key={l.id} className="autocomplete-item"
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                    onClick={() => handleSelectLocation(l, 'dropoff')}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{l.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.address}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Waypoints */}

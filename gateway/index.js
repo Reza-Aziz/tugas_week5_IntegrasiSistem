@@ -29,33 +29,33 @@ function loadProto(filename) {
   return grpc.loadPackageDefinition(pkgDef);
 }
 
-const authProto     = loadProto('auth.proto');
+const authProto = loadProto('auth.proto');
 const locationProto = loadProto('location.proto');
-const rideProto     = loadProto('ride.proto');
-const driverProto   = loadProto('driver.proto');
-const chatProto     = loadProto('chat.proto');
+const rideProto = loadProto('ride.proto');
+const driverProto = loadProto('driver.proto');
+const chatProto = loadProto('chat.proto');
 
 // ─── gRPC Clients ──────────────────────────────────────────────────────────
 
 const creds = grpc.credentials.createInsecure();
 
-const authClient     = new authProto.jalanyuk.auth.AuthService(GRPC_HOST, creds);
+const authClient = new authProto.jalanyuk.auth.AuthService(GRPC_HOST, creds);
 const locationClient = new locationProto.jalanyuk.location.LocationService(GRPC_HOST, creds);
-const rideClient     = new rideProto.jalanyuk.ride.RideService(GRPC_HOST, creds);
-const driverClient   = new driverProto.jalanyuk.driver.DriverService(GRPC_HOST, creds);
-const chatClient     = new chatProto.jalanyuk.chat.ChatService(GRPC_HOST, creds);
+const rideClient = new rideProto.jalanyuk.ride.RideService(GRPC_HOST, creds);
+const driverClient = new driverProto.jalanyuk.driver.DriverService(GRPC_HOST, creds);
+const chatClient = new chatProto.jalanyuk.chat.ChatService(GRPC_HOST, creds);
 
 // ─── Helper ────────────────────────────────────────────────────────────────
 
 function grpcError(res, err) {
   const statusMap = {
-    1:  400, // CANCELLED
-    2:  500, // UNKNOWN
-    3:  400, // INVALID_ARGUMENT
-    5:  404, // NOT_FOUND
-    6:  409, // ALREADY_EXISTS
-    7:  403, // PERMISSION_DENIED
-    9:  400, // FAILED_PRECONDITION
+    1: 400, // CANCELLED
+    2: 500, // UNKNOWN
+    3: 400, // INVALID_ARGUMENT
+    5: 404, // NOT_FOUND
+    6: 409, // ALREADY_EXISTS
+    7: 403, // PERMISSION_DENIED
+    9: 400, // FAILED_PRECONDITION
     13: 500, // INTERNAL
     14: 503, // UNAVAILABLE
     16: 401, // UNAUTHENTICATED
@@ -264,7 +264,7 @@ wssChat.on('connection', (ws, req) => {
       if (message.type === 'TYPING') {
         wssChat.clients.forEach(client => {
           if (client !== ws && client.readyState === WebSocket.OPEN) {
-             client.send(JSON.stringify(message));
+            client.send(JSON.stringify(message));
           }
         });
         return;
@@ -292,7 +292,7 @@ wssDriver.on('connection', (ws, req) => {
       const msg = JSON.parse(data);
       if (msg.type === 'START_TRACKING' && msg.ride_id && msg.session_token) {
         grpcCall = driverClient.TrackDriver({ ride_id: msg.ride_id, session_token: msg.session_token });
-        
+
         grpcCall.on('data', (location) => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(location));
@@ -377,7 +377,7 @@ wssEvents.on('connection', (ws) => {
       } else if (msg.type === 'UNWATCH_RIDE') {
         clientInfo.activeRideId = null;
       }
-    } catch (e) {}
+    } catch (e) { }
   });
 
   ws.on('close', () => {
