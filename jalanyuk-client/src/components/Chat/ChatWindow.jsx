@@ -10,8 +10,10 @@ export function ChatWindow({ rideId, onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
+  const [typingName, setTypingName] = useState(null);
   const wsRef = useRef(null);
   const bottomRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!rideId || !user) return;
@@ -20,6 +22,15 @@ export function ChatWindow({ rideId, onClose }) {
       rideId,
       user.session_token,
       (msg) => {
+        if (msg.type === 'TYPING') {
+          if (msg.sender_name && msg.sender_id !== user.user_id) {
+            setTypingName(msg.sender_name);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => setTypingName(null), 2000);
+          }
+          return;
+        }
+
         if (msg.content) {
           setMessages((prev) => {
             // Deduplicate by checking last few messages
@@ -46,7 +57,7 @@ export function ChatWindow({ rideId, onClose }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, typingName]);
 
   const sendMessage = useCallback(() => {
     const text = input.trim();
@@ -59,6 +70,10 @@ export function ChatWindow({ rideId, onClose }) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    } else {
+      if (wsRef.current && user) {
+        wsRef.current.sendTyping(user.username, user.user_id);
+      }
     }
   };
 
@@ -144,6 +159,18 @@ export function ChatWindow({ rideId, onClose }) {
             </div>
           );
         })}
+        {typingName && (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: 4, marginLeft: 4 }}>
+                {typingName} sedang mengetik...
+             </span>
+             <div className="chat-bubble chat-bubble--received" style={{ display: 'inline-block', width: 'fit-content' }}>
+               <span style={{ animation: 'fade 1.5s infinite' }}>●</span>
+               <span style={{ animation: 'fade 1.5s infinite 0.2s', marginLeft: 2 }}>●</span>
+               <span style={{ animation: 'fade 1.5s infinite 0.4s', marginLeft: 2 }}>●</span>
+             </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 

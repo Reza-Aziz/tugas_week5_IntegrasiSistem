@@ -106,6 +106,11 @@ async function trackDriver(call) {
         speed: 0,
         timestamp: new Date().toISOString()
       });
+      const currentRide = db.prepare('SELECT status FROM rides WHERE id = ?').get(ride_id);
+      if (currentRide && ['COMPLETED', 'CANCELLED'].includes(currentRide.status)) {
+         clearInterval(stateObj.interval);
+         try { call.end(); } catch (e) {}
+      }
     }, 3000);
   } catch (err) {
     console.error('Simulation error:', err);
@@ -227,15 +232,14 @@ async function listPendingRides(call, callback) {
       JOIN users cu ON cu.id = r.customer_id
       JOIN locations lp ON lp.id = r.pickup_location_id
       JOIN locations ld ON ld.id = r.dropoff_location_id
-      WHERE r.status = 'PENDING'
+      WHERE r.status = 'PENDING' AND r.created_at >= datetime('now', '-30 minute')
       ORDER BY r.created_at DESC
       LIMIT 10
     `).all();
 
-    const { calculateDistance } = require('../utils/pricing');
+    const { PRICING, calculateDistance } = require('../utils/pricing');
 
     const pendingRides = await Promise.all(rides.map(async (r) => {
-      // Fetch waypoints for this ride to calculate proper through-waypoint distance
       const wps = db
         .prepare('SELECT lat, lng FROM waypoints WHERE ride_id = ? ORDER BY order_index')
         .all(r.ride_id);
@@ -246,24 +250,14 @@ async function listPendingRides(call, callback) {
         { lat: r.dropoff_lat, lng: r.dropoff_lng },
       ];
 
-      let distanceKm = null;
-      try {
-        const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
-        const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
-        const data = await res.json();
-        if (data.routes && data.routes.length > 0) {
-          distanceKm = data.routes[0].distance / 1000;
-        }
-      } catch (osrmErr) {
-        console.warn(`[Driver] OSRM unavailable for ride ${r.ride_id}, falling back to Haversine`);
-      }
+      let distanceKm = (r.total_price - PRICING.BASE_FARE - (wps.length * PRICING.WAYPOINT_SURCHARGE)) / PRICING.PER_KM;
 
-      if (distanceKm === null) {
-        distanceKm = 0;
+      if (r.total_price <= PRICING.MIN_FARE) {
+        let hav = 0;
         for (let i = 0; i < points.length - 1; i++) {
-          distanceKm += calculateDistance(points[i], points[i + 1]);
+          hav += calculateDistance(points[i], points[i + 1]);
         }
+        distanceKm = Math.max(hav, distanceKm);
       }
 
       return {

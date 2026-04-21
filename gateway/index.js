@@ -114,7 +114,7 @@ app.get('/api/locations/search', (req, res) => {
 
 // POST /api/rides — wrapper for client-streaming RequestRide
 app.post('/api/rides', (req, res) => {
-  const { session_token, pickup_location_id, dropoff_location_id, waypoints = [] } = req.body;
+  const { session_token, pickup_location_id, dropoff_location_id, waypoints = [], surge_multiplier = 1.0 } = req.body;
 
   const call = rideClient.RequestRide((err, response) => {
     if (err) return grpcError(res, err);
@@ -124,7 +124,7 @@ app.post('/api/rides', (req, res) => {
   // Send metadata first
   call.write({
     payload: 'metadata',
-    metadata: { session_token, pickup_location_id, dropoff_location_id },
+    metadata: { session_token, pickup_location_id, dropoff_location_id, surge_multiplier },
   });
 
   // Stream waypoints
@@ -211,6 +211,7 @@ const server = http.createServer(app);
 
 const wssChat = new WebSocket.Server({ noServer: true });
 const wssDriver = new WebSocket.Server({ noServer: true });
+const wssEvents = new WebSocket.Server({ noServer: true }); // New events channel
 
 server.on('upgrade', (request, socket, head) => {
   // Use a dummy base URL since we only care about pathname
@@ -223,6 +224,10 @@ server.on('upgrade', (request, socket, head) => {
   } else if (pathname === '/ws/driver') {
     wssDriver.handleUpgrade(request, socket, head, (ws) => {
       wssDriver.emit('connection', ws, request);
+    });
+  } else if (pathname === '/ws/events') {
+    wssEvents.handleUpgrade(request, socket, head, (ws) => {
+      wssEvents.emit('connection', ws, request);
     });
   } else {
     socket.destroy();
@@ -256,6 +261,14 @@ wssChat.on('connection', (ws, req) => {
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data);
+      if (message.type === 'TYPING') {
+        wssChat.clients.forEach(client => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+             client.send(JSON.stringify(message));
+          }
+        });
+        return;
+      }
       if (!closed) grpcCall.write(message);
     } catch (e) {
       console.error('[WS] Invalid message:', e);
@@ -313,6 +326,66 @@ wssDriver.on('connection', (ws, req) => {
   });
 });
 
+// ─── Global Events & Surge Pricing (WebSocket Push) ────────────────────────
+const eventClients = new Set();
+let currentSurge = 1.0;
+
+// Internal watcher: polls gRPC on behalf of clients and pushes changes over WS
+setInterval(() => {
+  if (eventClients.size === 0) return;
+
+  // Surge update: 5% chance every 3 seconds to toggle surge
+  if (Math.random() < 0.05) {
+    currentSurge = currentSurge === 1.0 ? 1.5 : 1.0;
+    const msg = JSON.stringify({ type: 'SURGE_UPDATE', multiplier: currentSurge });
+    eventClients.forEach(c => c.ws.send(msg));
+  }
+
+  // Push ride updates
+  eventClients.forEach(c => {
+    if (c.ws.readyState !== WebSocket.OPEN || !c.token) return;
+
+    if (c.role === 'DRIVER') {
+      driverClient.ListPendingRides({ session_token: c.token }, (err, data) => {
+        if (!err && c.ws.readyState === WebSocket.OPEN) {
+          c.ws.send(JSON.stringify({ type: 'PENDING_RIDES', rides: data.rides || [] }));
+        }
+      });
+    } else if (c.role === 'CUSTOMER' && c.activeRideId) {
+      rideClient.GetRideStatus({ ride_id: c.activeRideId, session_token: c.token }, (err, data) => {
+        if (!err && c.ws.readyState === WebSocket.OPEN) {
+          c.ws.send(JSON.stringify({ type: 'RIDE_STATUS', ride: data }));
+        }
+      });
+    }
+  });
+}, 3000);
+
+wssEvents.on('connection', (ws) => {
+  const clientInfo = { ws, token: null, role: null, activeRideId: null };
+  eventClients.add(clientInfo);
+  ws.send(JSON.stringify({ type: 'SURGE_UPDATE', multiplier: currentSurge }));
+
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'AUTH') {
+        clientInfo.token = msg.session_token;
+        clientInfo.role = msg.role;
+      } else if (msg.type === 'WATCH_RIDE') {
+        clientInfo.activeRideId = msg.ride_id;
+      } else if (msg.type === 'UNWATCH_RIDE') {
+        clientInfo.activeRideId = null;
+      }
+    } catch (e) {}
+  });
+
+  ws.on('close', () => {
+    eventClients.delete(clientInfo);
+  });
+});
+
+
 const PORT = process.env.GATEWAY_PORT || 3000;
 server.listen(PORT, () => {
   console.log('╔══════════════════════════════════════╗');
@@ -320,5 +393,6 @@ server.listen(PORT, () => {
   console.log(`║   HTTP: http://localhost:${PORT}         ║`);
   console.log(`║   WS:   ws://localhost:${PORT}/ws/chat   ║`);
   console.log(`║   WS:   ws://localhost:${PORT}/ws/driver ║`);
+  console.log(`║   WS:   ws://localhost:${PORT}/ws/events ║`);
   console.log('╚══════════════════════════════════════╝');
 });

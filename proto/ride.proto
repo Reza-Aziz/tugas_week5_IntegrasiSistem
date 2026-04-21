@@ -20,6 +20,7 @@ message RideMetadata {
     string session_token = 1;
     string pickup_location_id = 2;
     string dropoff_location_id = 3;
+    double surge_multiplier = 4;
 }
 
 message Waypoint {

@@ -132,9 +132,41 @@ export class ChatWebSocket {
     }
   }
 
+  sendTyping(username, userId, rideId = this.rideId, token = this.token) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'TYPING', sender_name: username, sender_id: userId, ride_id: rideId, session_token: token }));
+    }
+  }
+
   close() {
     this.ws.close();
   }
+}
+
+// ─── Global Events ──────────────────────────────────────────────────────────
+
+export function connectGlobalEvents({ token, role, onSurge, onRideStatus, onPendingRides }) {
+  const WS_EVENTS_URL = import.meta.env.VITE_WS_EVENTS_URL || 'ws://localhost:3000/ws/events';
+  const ws = new WebSocket(WS_EVENTS_URL);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'AUTH', session_token: token, role }));
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'SURGE_UPDATE') onSurge?.(msg.multiplier);
+      if (msg.type === 'RIDE_STATUS') onRideStatus?.(msg.ride);
+      if (msg.type === 'PENDING_RIDES') onPendingRides?.(msg.rides);
+    } catch {}
+  };
+
+  return {
+    watchRide: (rideId) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'WATCH_RIDE', ride_id: rideId })),
+    unwatchRide: () => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'UNWATCH_RIDE' })),
+    close: () => ws.close()
+  };
 }
 
 export { BASE_URL };

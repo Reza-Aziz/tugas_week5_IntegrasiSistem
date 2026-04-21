@@ -1,8 +1,8 @@
 // pages/DriverPage.jsx — Driver dashboard: pending rides, active ride, chat
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { driverApi, locationApi, trackDriver } from '../api/gateway';
+import { driverApi, locationApi, trackDriver, connectGlobalEvents } from '../api/gateway';
 import { RideMap } from '../components/Map/RideMap';
 import { ChatWindow } from '../components/Chat/ChatWindow';
 import { showToast } from '../components/UI/Toast';
@@ -61,18 +61,27 @@ export function DriverPage() {
   const canComplete = activeRide?.status === 'IN_PROGRESS' && distMeters <= 300; 
 
 
+  /* ─ Event-Driven Pending Rides (WebSocket Push) ────────────────── */
+  const eventsRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return;
+    eventsRef.current = connectGlobalEvents({
+      token: user.session_token,
+      role: 'DRIVER',
+      onPendingRides: (rides) => {
+        setPendingRides(rides);
+        setLoading(false);
+      }
+    });
+
+    return () => eventsRef.current?.close();
+  }, [user]);
+
   useEffect(() => {
     locationApi.list().then((d) => setLocations(d.locations || [])).catch(() => {});
-    loadPending();
+    loadPending(true); // Initial fetch
   }, []);
-
-  // Auto-poll pending rides every 5s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (view === 'pending') loadPending(true);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [view]);
 
   async function loadPending(silent = false) {
     if (!silent) setLoading(true);
@@ -224,7 +233,7 @@ export function DriverPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)' }}>Ride Tersedia</h2>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>Auto-refresh setiap 5 detik</p>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--brand-primary)' }}>Live updates via WebSocket</p>
           </div>
           <button
             onClick={() => loadPending()}

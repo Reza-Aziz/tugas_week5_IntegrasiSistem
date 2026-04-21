@@ -1,8 +1,8 @@
 // pages/CustomerPage.jsx — Customer dashboard: booking, tracking, chat
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { locationApi, rideApi, trackDriver } from '../api/gateway';
+import { locationApi, rideApi, trackDriver, connectGlobalEvents } from '../api/gateway';
 import { RideMap } from '../components/Map/RideMap';
 import { ChatWindow } from '../components/Chat/ChatWindow';
 import { showToast } from '../components/UI/Toast';
@@ -40,8 +40,9 @@ export function CustomerPage() {
   const [rideHistory, setRideHistory] = useState([]);
   const [loadingBook, setLoadingBook] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [trackCleanup, setTrackCleanup] = useState(null);
-  const [pollingInterval, setPollingInterval] = useState(null);
+  const [surge, setSurge] = useState(1);
+  const eventsRef = useRef(null);
+  const trackingRef = useRef(null);
 
   /* ─ Load locations ─────────────────────────────── */
   useEffect(() => {
@@ -82,36 +83,70 @@ export function CustomerPage() {
     initActiveRide();
   }, [user.session_token]);
 
-  /* ─ Poll ride status when activeRide exists ─────── */
+  /* ─ Event-Driven Status & Surge (WebSocket Push) ────────────────── */
   useEffect(() => {
-    if (!activeRide || ['COMPLETED', 'CANCELLED'].includes(activeRide.status)) return;
+    if (!user) return;
+    eventsRef.current = connectGlobalEvents({
+      token: user.session_token,
+      role: 'CUSTOMER',
+      onSurge: (multiplier) => {
+        setSurge((prev) => {
+          if (multiplier > prev) showToast('⚠️ Harga berubah karena permintaan tinggi!', 'warning');
+          return multiplier;
+        });
+      },
+      onRideStatus: (data) => {
+        setActiveRide((prev) => {
+          if (!prev || prev.ride_id !== data.ride_id) return prev;
+          return { ...prev, ...data };
+        });
+      }
+    });
 
-    const interval = setInterval(async () => {
-      try {
-        const data = await rideApi.getRide(activeRide.ride_id, user.session_token);
-        setActiveRide((prev) => ({ ...prev, ...data }));
-        if (data.status === 'ACCEPTED' && !trackCleanup) {
-          startTracking(activeRide.ride_id);
-        }
-        if (['COMPLETED', 'CANCELLED'].includes(data.status)) {
-          clearInterval(interval);
-          if (data.status === 'COMPLETED') {
-            showToast('🏁 Perjalanan selesai! Terima kasih.', 'success');
-          } else if (data.status === 'CANCELLED') {
-            showToast('❌ Perjalanan dibatalkan.', 'warning');
-          }
-          setTimeout(() => {
-            setActiveRide(null);
-            setDriverPos(null);
-            if (trackCleanup) { trackCleanup(); setTrackCleanup(null); }
-            setView('booking');
-          }, 1500);
-        }
-      } catch {}
-    }, 3000);
+    return () => eventsRef.current?.close();
+  }, [user]);
 
-    return () => clearInterval(interval);
-  }, [activeRide?.ride_id, trackCleanup]);
+  // Handle side effects like tracking connection/cleanup and ride completion
+  useEffect(() => {
+    if (!activeRide) {
+      if (trackingRef.current) { trackingRef.current(); trackingRef.current = null; }
+      return;
+    }
+
+    if (['COMPLETED', 'CANCELLED'].includes(activeRide.status)) {
+      if (trackingRef.current) { trackingRef.current(); trackingRef.current = null; }
+      
+      if (activeRide.status === 'COMPLETED') {
+        showToast('🏁 Perjalanan selesai! Terima kasih.', 'success');
+      } else if (activeRide.status === 'CANCELLED') {
+        showToast('❌ Perjalanan dibatalkan.', 'warning');
+      }
+      const timer = setTimeout(() => {
+        setActiveRide(null);
+        setDriverPos(null);
+        setView('booking');
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else if (['ACCEPTED', 'IN_PROGRESS'].includes(activeRide.status)) {
+      if (!trackingRef.current) {
+        trackingRef.current = trackDriver(
+          activeRide.ride_id,
+          user.session_token,
+          (loc) => setDriverPos(loc),
+          () => console.log('Tracking stream ended'),
+          (err) => console.error('[Track]', err)
+        );
+      }
+    }
+  }, [activeRide?.status, activeRide?.ride_id, user.session_token]);
+
+  useEffect(() => {
+    if (activeRide?.ride_id) {
+       eventsRef.current?.watchRide(activeRide.ride_id);
+    } else {
+       eventsRef.current?.unwatchRide();
+    }
+  }, [activeRide?.ride_id]);
 
   /* ─ Map display state ──────────────────────────── */
   const pickupLoc = locations.find((l) => l.id === pickup);
@@ -130,6 +165,7 @@ export function CustomerPage() {
         pickup_location_id: pickup,
         dropoff_location_id: dropoff,
         waypoints: waypoints.map((w) => ({ lat: w.lat, lng: w.lng, name: w.name })),
+        surge_multiplier: surge,
       }, user.session_token);
 
       setActiveRide({ ride_id: data.ride_id, status: 'PENDING', total_price: data.total_price });
@@ -142,40 +178,14 @@ export function CustomerPage() {
     }
   }
 
-  /* ─ Start SSE tracking ──────────────────────────── */
-  function startTracking(rideId) {
-    if (trackCleanup) { trackCleanup(); }
-    
-    const cleanup = trackDriver(
-      rideId,
-      user.session_token,
-      (loc) => {
-        setDriverPos(loc);
-      },
-      () => {
-        setDriverPos(null);
-        setActiveRide((prev) => prev ? { ...prev, status: 'COMPLETED' } : prev);
-        showToast('🏁 Driver telah sampai! Perjalanan selesai.', 'success');
-        setTimeout(() => {
-          setActiveRide(null);
-          setDriverPos(null);
-          setView('booking');
-        }, 1500);
-      },
-      (err) => console.error('[Track]', err)
-    );
-    setTrackCleanup(() => cleanup);
-  }
-
-  // Ensure trackCleanup is called on unmount to prevent duplicated tracking loops (flickering)
+  // Cleanup tracking on unmount
   useEffect(() => {
     return () => {
-      if (trackCleanup) {
-        trackCleanup();
+      if (trackingRef.current) {
+        trackingRef.current();
       }
     };
-  }, [trackCleanup]);
-
+  }, []);
 
   /* ─ Cancel ride ─────────────────────────────────── */
   async function cancelRide() {
@@ -184,7 +194,7 @@ export function CustomerPage() {
       await rideApi.cancelRide(activeRide.ride_id, user.session_token);
       setActiveRide(null);
       setDriverPos(null);
-      if (trackCleanup) { trackCleanup(); setTrackCleanup(null); }
+      if (trackingRef.current) { trackingRef.current(); trackingRef.current = null; }
       setView('booking');
       showToast('Ride dibatalkan', 'warning');
     } catch (err) {
@@ -322,7 +332,9 @@ export function CustomerPage() {
               <div className="divider" />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>💰 Total</span>
-                <span className="price-display">Rp{Math.round(pricing.total_price).toLocaleString('id-ID')}</span>
+                <span className="price-display" style={{ color: surge > 1 ? 'var(--color-error)' : undefined }}>
+                   Rp{Math.round(pricing.total_price * surge).toLocaleString('id-ID')}
+                </span>
               </div>
             </div>
           )}

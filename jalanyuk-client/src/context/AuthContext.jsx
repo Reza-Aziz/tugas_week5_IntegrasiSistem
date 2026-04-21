@@ -8,7 +8,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('jalanyuk_user');
+      const saved = sessionStorage.getItem('jalanyuk_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
       username: data.username,
     };
     setUser(userInfo);
-    localStorage.setItem('jalanyuk_user', JSON.stringify(userInfo));
+    sessionStorage.setItem('jalanyuk_user', JSON.stringify(userInfo));
     return userInfo;
   }, []);
 
@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
       try { await authApi.logout(user.session_token); } catch {}
     }
     setUser(null);
-    localStorage.removeItem('jalanyuk_user');
+    sessionStorage.removeItem('jalanyuk_user');
   }, [user]);
 
   return (

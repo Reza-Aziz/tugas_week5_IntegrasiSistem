@@ -16,11 +16,13 @@ function requestRide(call, callback) {
   let dropoffLoc = null;
   const waypoints = [];
   let waypointOrder = 0;
+  let surgeMultiplier = 1.0;
 
   call.on('data', (message) => {
     try {
       if (message.payload === 'metadata') {
         const meta = message.metadata;
+        surgeMultiplier = meta.surge_multiplier || 1.0;
         const user = validateToken(meta.session_token);
         if (!user || user.role !== 'CUSTOMER') {
           call.destroy(new Error('UNAUTHENTICATED'));
@@ -94,7 +96,7 @@ function requestRide(call, callback) {
       try {
         const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
         const url = `http://router.project-osrm.org/route/v1/driving/${coords}?overview=false`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
         const data = await res.json();
         if (data.routes && data.routes.length > 0) {
           distanceKm = data.routes[0].distance / 1000;
@@ -116,7 +118,7 @@ function requestRide(call, callback) {
 
       const { PRICING } = require('../utils/pricing');
       const fare = PRICING.BASE_FARE + distanceKm * PRICING.PER_KM + waypoints.length * PRICING.WAYPOINT_SURCHARGE;
-      const totalPrice = Math.max(fare, PRICING.MIN_FARE);
+      const totalPrice = Math.max(fare, PRICING.MIN_FARE) * surgeMultiplier;
 
       db.prepare("UPDATE rides SET total_price = ?, updated_at = datetime('now') WHERE id = ?")
         .run(totalPrice, rideId);
