@@ -32,6 +32,11 @@ export function CustomerPage() {
   const [waypoints, setWaypoints] = useState([]);
   const [wpForm, setWpForm] = useState({ lat: '', lng: '', name: '' });
   const [pricing, setPricing] = useState(null);
+  const [serviceType, setServiceType] = useState('STANDARD');
+  const [reviewRideId, setReviewRideId] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [tip, setTip] = useState(0);
+  const [loadingReview, setLoadingReview] = useState(false);
 
   // Autocomplete states
   const [pickupQuery, setPickupQuery] = useState('');
@@ -70,8 +75,9 @@ export function CustomerPage() {
       origin: pLoc.coord,
       destination: dLoc.coord,
       waypoints: waypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
+      service_type: serviceType,
     }).then(setPricing).catch(() => {});
-  }, [pickup, dropoff, waypoints, locations]);
+  }, [pickup, dropoff, waypoints, locations, serviceType]);
 
   /* ─ Search Autocomplete Hooks ─────────────────────── */
   useEffect(() => {
@@ -147,6 +153,7 @@ export function CustomerPage() {
   const isFirstSurgeRef = useRef(true);
   const activeRideRef = useRef(activeRide);
   const hasBothPointsRef = useRef(false);
+  const viewRef = useRef(view);
 
   useEffect(() => {
     activeRideRef.current = activeRide;
@@ -155,6 +162,10 @@ export function CustomerPage() {
   useEffect(() => {
     hasBothPointsRef.current = !!(pickup && dropoff);
   }, [pickup, dropoff]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   useEffect(() => {
     if (!user) return;
@@ -167,7 +178,8 @@ export function CustomerPage() {
             isFirstSurgeRef.current = false;
             return multiplier;
           }
-          if (!activeRideRef.current && hasBothPointsRef.current && multiplier > prev) {
+          // Only show toast if not in active ride AND has points AND surge increased AND NOT in review view
+          if (!activeRideRef.current && hasBothPointsRef.current && multiplier > prev && viewRef.current !== 'review') {
             showToast('⚠️ Harga berubah karena permintaan tinggi!', 'warning');
           }
           return multiplier;
@@ -195,16 +207,23 @@ export function CustomerPage() {
       if (trackingRef.current) { trackingRef.current(); trackingRef.current = null; }
       
       if (activeRide.status === 'COMPLETED') {
-        showToast('🏁 Perjalanan selesai! Terima kasih.', 'success');
+        showToast('Perjalanan selesai! Silakan beri nilai.', 'success');
+        const rideIdToReview = activeRide.ride_id;
+        setTimeout(() => {
+          setActiveRide(null);
+          setDriverPos(null);
+          setReviewRideId(rideIdToReview);
+          setView('review');
+        }, 1500);
       } else if (activeRide.status === 'CANCELLED') {
-        showToast('❌ Perjalanan dibatalkan.', 'warning');
+        showToast('Perjalanan dibatalkan.', 'warning');
+        setTimeout(() => {
+          setActiveRide(null);
+          setDriverPos(null);
+          setView('booking');
+        }, 1500);
       }
-      const timer = setTimeout(() => {
-        setActiveRide(null);
-        setDriverPos(null);
-        setView('booking');
-      }, 1500);
-      return () => clearTimeout(timer);
+      return;
     } else if (['ACCEPTED', 'IN_PROGRESS'].includes(activeRide.status)) {
       if (!trackingRef.current) {
         trackingRef.current = trackDriver(
@@ -244,11 +263,12 @@ export function CustomerPage() {
         dropoff_location_id: dropoff,
         waypoints: waypoints.map((w) => ({ lat: w.lat, lng: w.lng, name: w.name })),
         surge_multiplier: surge,
+        service_type: serviceType,
       }, user.session_token);
 
       setActiveRide({ ride_id: data.ride_id, status: 'PENDING', total_price: data.total_price });
       setView('tracking');
-      showToast(`✅ Ride dipesan! ${data.message}`, 'success');
+      showToast(`Ride dipesan! ${data.message}`, 'success');
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -307,7 +327,28 @@ export function CustomerPage() {
     }
     setWaypoints((w) => [...w, { lat, lng, name: wpForm.name || `Waypoint ${w.length + 1}` }]);
     setWpForm({ lat: '', lng: '', name: '' });
-    showToast('⭕ Waypoint ditambahkan', 'success');
+    showToast('Waypoint ditambahkan', 'success');
+  }
+
+  /* ─ Submit Review ────────────────────────────────── */
+  async function submitReview() {
+    if (rating === 0) {
+      showToast('Berikan bintang 1-5 terlebih dahulu', 'warning');
+      return;
+    }
+    setLoadingReview(true);
+    try {
+      await rideApi.rateRide(reviewRideId, user.session_token, rating, tip);
+      showToast('Terima kasih atas ulasannya!', 'success');
+      setView('booking');
+      setReviewRideId(null);
+      setRating(0);
+      setTip(0);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoadingReview(false);
+    }
   }
 
   /* ─ Sidebar content ─────────────────────────────── */
@@ -433,6 +474,10 @@ export function CustomerPage() {
           {/* Pricing */}
           {pricing && (
             <div className="glass-card neon-glow" style={{ animation: 'slide-up 0.3s var(--ease-bounce)' }}>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                 <button className={`btn-${serviceType === 'MOTOR' ? 'primary' : 'secondary'}`} onClick={() => setServiceType('MOTOR')} style={{ flex: 1, padding: 8, textAlign: 'center' }}>🏍️ Motor <br/><span style={{ fontSize: 10 }}>-40%</span></button>
+                 <button className={`btn-${serviceType === 'STANDARD' ? 'primary' : 'secondary'}`} onClick={() => setServiceType('STANDARD')} style={{ flex: 1, padding: 8, textAlign: 'center' }}>🚗 Mobil</button>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>📏 Jarak</span>
                 <span className="font-mono" style={{ fontSize: 'var(--text-sm)' }}>{pricing.distance_km} km</span>
@@ -445,7 +490,7 @@ export function CustomerPage() {
               )}
               <div className="divider" />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>💰 Total</span>
+                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>💰 Total</span>
                 <span className="price-display" style={{ color: surge > 1 ? 'var(--color-error)' : undefined }}>
                    Rp{Math.round(pricing.total_price * surge).toLocaleString('id-ID')}
                 </span>
@@ -506,10 +551,10 @@ export function CustomerPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 24,
                   boxShadow: '0 0 16px rgba(59,130,246,0.4)',
-                }}>🚗</div>
+                }}>{activeRide.service_type === 'MOTOR' ? '🏍️' : '🚗'}</div>
                 <div>
                   <div style={{ fontWeight: 'var(--weight-semibold)' }}>{activeRide.driver_name}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>⭐ 4.8 • Toyota Avanza</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>⭐ 4.8 • {activeRide.service_type === 'MOTOR' ? 'Yamaha NMAX' : 'Toyota Avanza'}</div>
                 </div>
               </div>
             </div>
@@ -570,7 +615,7 @@ export function CustomerPage() {
                     {ride.pickup_name} → {ride.dropoff_name}
                   </span>
                   <span className={`status-badge status-badge--${ride.status?.toLowerCase()}`}>
-                    {ride.status}
+                    {ride.status} {ride.service_type === 'MOTOR' ? '🏍️' : '🚗'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -596,6 +641,44 @@ export function CustomerPage() {
             ← Kembali ke Status
           </button>
           <ChatWindow rideId={activeRide.ride_id} />
+        </div>
+      );
+    }
+
+    if (view === 'review' && reviewRideId) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1, alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)' }}>Perjalanan Selesai! 🎉</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Bagaimana pelayanan pengemudi kali ini?</p>
+          
+          <div style={{ display: 'flex', gap: 'var(--space-2)', margin: 'var(--space-4) 0' }}>
+            {[1, 2, 3, 4, 5].map(star => (
+              <span key={star} onClick={() => setRating(star)}
+                style={{ fontSize: 32, cursor: 'pointer', filter: star <= rating ? 'none' : 'grayscale(100%) opacity(50%)', transition: 'all 0.2s' }}>
+                ⭐
+              </span>
+            ))}
+          </div>
+
+          <div className="glass-card" style={{ width: '100%', marginBottom: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginBottom: 'var(--space-3)' }}>Beri Uang Tip (Opsional)</p>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {[0, 5000, 10000, 20000].map(amount => (
+                <button key={amount} onClick={() => setTip(amount)}
+                  className={`btn-${tip === amount ? 'primary' : 'secondary'}`} style={{ flex: 1, padding: 8, fontSize: 12 }}>
+                  {amount === 0 ? 'Rp0' : `Rp${amount/1000}k`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button className="btn-primary" onClick={submitReview} disabled={loadingReview} style={{ width: '100%', padding: 'var(--space-3)' }}>
+            {loadingReview ? 'Mengirim...' : 'KIRIM ULASAN'}
+          </button>
+          
+          <button className="btn-secondary" onClick={() => { setView('booking'); setReviewRideId(null); }} style={{ width: '100%', padding: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+            LEWATI
+          </button>
         </div>
       );
     }
@@ -693,6 +776,7 @@ export function CustomerPage() {
           }
           waypoints={waypoints.length > 0 ? waypoints : activeRide?.waypoints || []}
           driverPos={driverPos}
+          driverVehicle={activeRide?.service_type || 'STANDARD'}
           flyTo={driverPos || pickupLoc?.coord || (activeRide?.pickup_lat ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng } : null)}
         />
 

@@ -5,6 +5,7 @@ const PRICING = {
   PER_KM: 3500,             // IDR 3.500/km
   WAYPOINT_SURCHARGE: 2000, // IDR 2.000 per waypoint
   MIN_FARE: 15000,          // IDR 15.000 minimum
+  MOTOR_MIN_FARE: 8000,     // IDR 8.000 minimum for motor
 };
 
 function toRad(deg) {

@@ -44,6 +44,7 @@ message AcceptRideResponse {
     double dropoff_lat = 5;
     double dropoff_lng = 6;
     repeated RideWaypoint waypoints = 7;
+    string service_type = 8;
 }
 
 message ListPendingRidesRequest {
@@ -61,6 +62,7 @@ message PendingRide {
     string dropoff_name = 4;
     double distance_km = 5;
     double total_price = 6;
+    string service_type = 7;
 }
 
 message CompleteRideRequest {

@@ -2,26 +2,29 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { driverApi, locationApi, trackDriver, connectGlobalEvents } from '../api/gateway';
+import { driverApi, locationApi, rideApi, trackDriver, connectGlobalEvents } from '../api/gateway';
 import { RideMap } from '../components/Map/RideMap';
 import { ChatWindow } from '../components/Chat/ChatWindow';
 import { showToast } from '../components/UI/Toast';
 import { useTheme } from '../context/ThemeContext';
-import { RefreshCw, LogOut, CheckCircle, MessageCircle, Car, Moon, Sun } from 'lucide-react';
+import { RefreshCw, LogOut, CheckCircle, MessageCircle, Car, Moon, Sun, History, Navigation } from 'lucide-react';
 
 export function DriverPage() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [locations, setLocations] = useState([]);
   const [pendingRides, setPendingRides] = useState([]);
-  const [activeRide, setActiveRide] = useState(null); // { ride_id, customer_name, pickup_lat, pickup_lng }
-  const [view, setView] = useState('pending'); // 'pending' | 'active' | 'chat'
+  const [activeRide, setActiveRide] = useState(null); 
+  const [view, setView] = useState('pending'); // 'pending' | 'active' | 'chat' | 'history'
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(null);
   const [completing, setCompleting] = useState(false);
-  const [pollInterval, setPollInterval] = useState(null);
   const [driverPos, setDriverPos] = useState(null);
   const [trackCleanup, setTrackCleanup] = useState(null);
+  const [rideHistory, setRideHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  const lastCompletedRideIdRef = useRef(null);
 
   useEffect(() => {
     if (activeRide && !trackCleanup) {
@@ -57,7 +60,6 @@ export function DriverPage() {
     ? calcDistanceMeters(driverPos.lat, driverPos.lng, activeRide.dropoff_lat, activeRide.dropoff_lng)
     : Infinity;
 
-  // Use 300 meters to be safe against slight simulation offsets / OSRM parking issues
   const canComplete = activeRide?.status === 'IN_PROGRESS' && distMeters <= 300; 
 
 
@@ -72,6 +74,11 @@ export function DriverPage() {
       onPendingRides: (rides) => {
         setPendingRides(rides);
         setLoading(false);
+      },
+      onTipReceived: (msg) => {
+        // Broad check since driver might have already cleared activeRide
+        showToast(`🎉 Pelanggan memberi Tip Rp${msg.tip.toLocaleString('id-ID')} dan Bintang ${msg.rating}!`, 'success');
+        loadHistory(true);
       }
     });
 
@@ -80,7 +87,8 @@ export function DriverPage() {
 
   useEffect(() => {
     locationApi.list().then((d) => setLocations(d.locations || [])).catch(() => {});
-    loadPending(true); // Initial fetch
+    loadPending(true); 
+    loadHistory(true);
   }, []);
 
   async function loadPending(silent = false) {
@@ -95,6 +103,22 @@ export function DriverPage() {
     }
   }
 
+  async function loadHistory(silent = false) {
+    if (!silent) setLoadingHistory(true);
+    try {
+      const data = await rideApi.listRides(user.session_token);
+      setRideHistory(data.rides || []);
+    } catch (err) {
+      if (!silent) showToast(err.message, 'error');
+    } finally {
+      if (!silent) setLoadingHistory(false);
+    }
+  }
+
+  useEffect(() => {
+    if (view === 'history') loadHistory();
+  }, [view]);
+
   async function acceptRide(rideId) {
     setAccepting(rideId);
     try {
@@ -108,9 +132,10 @@ export function DriverPage() {
         dropoff_lng: data.dropoff_lng,
         waypoints: data.waypoints || [],
         status: 'ACCEPTED',
+        service_type: data.service_type || 'STANDARD',
       });
       setView('active');
-      showToast(`✅ Ride diterima! Jemput ${data.customer_name}`, 'success');
+      showToast(`Ride diterima! Jemput ${data.customer_name}`, 'success');
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -123,7 +148,7 @@ export function DriverPage() {
     try {
       await driverApi.pickupRide(activeRide.ride_id, user.session_token);
       setActiveRide((prev) => ({ ...prev, status: 'IN_PROGRESS' }));
-      showToast('🚗 Menuju tujuan akhir!', 'success');
+      showToast('Menuju tujuan akhir!', 'success');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -133,11 +158,13 @@ export function DriverPage() {
     if (!activeRide) return;
     setCompleting(true);
     try {
+      lastCompletedRideIdRef.current = activeRide.ride_id;
       await driverApi.completeRide(activeRide.ride_id, user.session_token);
       setActiveRide(null);
       setView('pending');
-      showToast('🏁 Perjalanan selesai! Bagus.', 'success');
+      showToast('Perjalanan selesai! Bagus.', 'success');
       loadPending();
+      loadHistory(true);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -148,6 +175,10 @@ export function DriverPage() {
   function formatPrice(p) {
     return 'Rp' + Math.round(p).toLocaleString('id-ID');
   }
+
+  const todayEarnings = rideHistory
+    .filter(r => r.status === 'COMPLETED' && new Date(r.created_at).toDateString() === new Date().toDateString())
+    .reduce((sum, r) => sum + r.total_price + (r.tip || 0), 0);
 
   function renderContent() {
     if (view === 'chat' && activeRide) {
@@ -188,15 +219,6 @@ export function DriverPage() {
             </div>
           </div>
 
-          {activeRide.pickup_lat && (
-            <div className="glass-card">
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', marginBottom: 'var(--space-2)' }}>KOORDINAT JEMPUT</div>
-              <div className="font-mono" style={{ fontSize: 'var(--text-sm)' }}>
-                {activeRide.pickup_lat.toFixed(4)}, {activeRide.pickup_lng.toFixed(4)}
-              </div>
-            </div>
-          )}
-
           <div className="divider" />
 
           <button className="btn-secondary" onClick={() => setView('chat')}>
@@ -223,6 +245,52 @@ export function DriverPage() {
                 : <><CheckCircle size={16} /> SELESAIKAN RIDE {activeRide.status === 'IN_PROGRESS' && !canComplete ? (distMeters === Infinity ? '(Mencari sinyal...)' : `(${Math.round(distMeters)}m lagi)`) : ''}</>}
             </button>
           )}
+        </div>
+      );
+    }
+
+    if (view === 'history') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)' }}>Riwayat & Pendapatan</h2>
+            <button onClick={() => loadHistory()} disabled={loadingHistory} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <RefreshCw size={16} style={{ animation: loadingHistory ? 'spin 1s linear infinite' : 'none' }} />
+            </button>
+          </div>
+
+          <div className="glass-card neon-glow" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: 'white' }}>
+            <div style={{ fontSize: 'var(--text-xs)', opacity: 0.8, marginBottom: 4 }}>TOTAL PENDAPATAN HARI INI</div>
+            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-bold)' }}>{formatPrice(todayEarnings)}</div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {loadingHistory ? (
+              [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 80 }} />)
+            ) : rideHistory.length === 0 ? (
+              <p style={{ color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 40 }}>Belum ada riwayat perjalanan</p>
+            ) : (
+              rideHistory.map((ride) => (
+                <div key={ride.ride_id} className="glass-card stagger-item">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>
+                      {ride.pickup_name} → {ride.dropoff_name}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 'var(--weight-bold)', color: 'var(--brand-primary)' }}>{formatPrice(ride.total_price)}</div>
+                      {ride.tip > 0 && <div style={{ fontSize: 10, color: '#10B981' }}>+ Tip {formatPrice(ride.tip)}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                      {new Date(ride.created_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                    </div>
+                    {ride.rating > 0 && <div style={{ fontSize: 10 }}>{'⭐'.repeat(ride.rating)}</div>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       );
     }
@@ -262,7 +330,7 @@ export function DriverPage() {
                       📍 {ride.pickup_name}
                     </div>
                     <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      🏁 {ride.dropoff_name}
+                      🏁 {ride.dropoff_name} {ride.service_type === 'MOTOR' ? '🏍️' : '🚗'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -319,7 +387,7 @@ export function DriverPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 'var(--weight-extrabold)', letterSpacing: 'var(--tracking-tight)' }}>Driver Mode</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              🟢 {user?.username} — Online
+              🟢 {user?.username}
             </div>
           </div>
           <button onClick={toggleTheme} title="Toggle Theme"
@@ -332,8 +400,45 @@ export function DriverPage() {
           </button>
         </div>
 
+        {/* View tabs */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          padding: '0 var(--space-3)',
+        }}>
+          {[
+            { key: 'pending', icon: <Car size={14} />, label: 'Order' },
+            { key: 'active', icon: <Navigation size={14} />, label: 'Status', show: !!activeRide },
+            { key: 'history', icon: <History size={14} />, label: 'Histori' },
+          ].filter((t) => t.show !== false).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setView(tab.key)}
+              style={{
+                flex: 1,
+                padding: 'var(--space-3) var(--space-2)',
+                background: 'none',
+                border: 'none',
+                borderBottom: `2px solid ${view === tab.key ? 'var(--brand-primary)' : 'transparent'}`,
+                color: view === tab.key ? 'var(--brand-primary)' : 'var(--text-secondary)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 'var(--weight-semibold)',
+                letterSpacing: 'var(--tracking-wide)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                transition: 'all 0.2s',
+              }}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Active ride indicator */}
-        {activeRide && (
+        {activeRide && view !== 'active' && (
           <div
             onClick={() => setView('active')}
             style={{
@@ -364,6 +469,7 @@ export function DriverPage() {
           dropoff={activeRide?.dropoff_lat ? { lat: activeRide.dropoff_lat, lng: activeRide.dropoff_lng, name: 'Tujuan' } : null}
           waypoints={activeRide?.waypoints || []}
           driverPos={driverPos}
+          driverVehicle={activeRide?.service_type || 'STANDARD'}
           flyTo={driverPos || driverPickup}
         />
       </main>

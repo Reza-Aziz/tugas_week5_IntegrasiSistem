@@ -97,7 +97,8 @@ app.get('/api/locations', (req, res) => {
 });
 
 app.post('/api/locations/pricing', (req, res) => {
-  locationClient.GetPricing(req.body, (err, data) => {
+  const { origin, destination, waypoints, service_type } = req.body;
+  locationClient.GetPricing({ origin, destination, waypoints, service_type }, (err, data) => {
     if (err) return grpcError(res, err);
     res.json(data);
   });
@@ -114,7 +115,7 @@ app.get('/api/locations/search', (req, res) => {
 
 // POST /api/rides — wrapper for client-streaming RequestRide
 app.post('/api/rides', (req, res) => {
-  const { session_token, pickup_location_id, dropoff_location_id, waypoints = [], surge_multiplier = 1.0 } = req.body;
+  const { session_token, pickup_location_id, dropoff_location_id, waypoints = [], surge_multiplier = 1.0, service_type = 'STANDARD' } = req.body;
 
   const call = rideClient.RequestRide((err, response) => {
     if (err) return grpcError(res, err);
@@ -124,7 +125,7 @@ app.post('/api/rides', (req, res) => {
   // Send metadata first
   call.write({
     payload: 'metadata',
-    metadata: { session_token, pickup_location_id, dropoff_location_id, surge_multiplier },
+    metadata: { session_token, pickup_location_id, dropoff_location_id, surge_multiplier, service_type },
   });
 
   // Stream waypoints
@@ -155,6 +156,26 @@ app.delete('/api/rides/:id', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
   rideClient.CancelRide({ ride_id: req.params.id, session_token: token }, (err, data) => {
     if (err) return grpcError(res, err);
+    res.json(data);
+  });
+});
+
+app.post('/api/rides/:id/rate', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  const { rating, tip } = req.body;
+  rideClient.RateRide({ ride_id: req.params.id, session_token: token, rating, tip }, (err, data) => {
+    if (err) return grpcError(res, err);
+    
+    // Broadcast TIP_RECEIVED ke seluruh driver, biarkan klien memfilter
+    if (tip && tip > 0) {
+      const tipMsg = JSON.stringify({ type: 'TIP_RECEIVED', ride_id: req.params.id, tip, rating });
+      eventClients.forEach(c => {
+        if (c.role === 'DRIVER' && c.ws.readyState === WebSocket.OPEN) {
+          c.ws.send(tipMsg);
+        }
+      });
+    }
+
     res.json(data);
   });
 });

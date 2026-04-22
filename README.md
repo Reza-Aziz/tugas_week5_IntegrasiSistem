@@ -1,92 +1,96 @@
-# JalanYuk 🛵
+# JalanYuk 🛵🚗
 
-> Aplikasi ride-hailing berbasis **gRPC** — dibuat untuk tugas _Integrasi Sistem_ Semester 4.
+> Sistem Ride-Hailing Cerdas — Optimasi gRPC & WebSocket Bridge untuk Tugas *Integrasi Sistem* Semester 4.
 
-## Tech Stack
+JalanYuk adalah platform ride-hailing modern yang mendemonstrasikan integrasi kompleks antara protokol **gRPC** (untuk performa tinggi di backend) dan **WebSocket** (untuk komunikasi real-time ke frontend). Sistem ini mendukung pemesanan kendaraan (Motor & Mobil), pelacakan pengemudi secara real-time, dan fitur interaktif lainnya.
 
-| Layer     | Teknologi                                           |
-| --------- | --------------------------------------------------- |
-| Protocol  | gRPC (`@grpc/grpc-js`)                              |
-| Backend   | Node.js gRPC Server (monolith)                      |
-| Gateway   | Express.js REST→gRPC bridge                         |
-| Frontend  | React (Vite) + Leaflet.js                           |
-| Database  | SQLite (`better-sqlite3`)                           |
-| Streaming | SSE (Server-Streaming) + WebSocket (Bidi-Streaming) |
+## 🚀 Fitur Utama & Kriteria Terpenuhi
 
-## gRPC Services
+### 1. Implementasi gRPC & WebSocket Bridge
+Seluruh fitur streaming di gRPC telah dijembatani secara optimal ke WebSocket di layer Gateway:
+*   **Tracking Driver (Server-Streaming)**: Koordinat simulasi dari gRPC server didorong ke browser via `/ws/driver`.
+*   **Chat Interaktif (Bidi-Streaming)**: Komunikasi dua arah antara customer dan driver via `/ws/chat`.
+*   **Command & Control**: Browser dapat mengirim instruksi (seperti `START_TRACKING`) yang secara otomatis memicu pemanggilan gRPC di backend.
 
-| Service             | RPCs                                                    | Streaming Type               |
-| ------------------- | ------------------------------------------------------- | ---------------------------- |
-| **AuthService**     | Register, Login, Logout                                 | Unary                        |
-| **LocationService** | ListLocations, GetPricing, SearchLocation               | Unary                        |
-| **RideService**     | RequestRide, GetRideStatus, ListRides, CancelRide       | **Client-side Streaming**    |
-| **DriverService**   | TrackDriver, AcceptRide, ListPendingRides, CompleteRide | **Server-side Streaming**    |
-| **ChatService**     | Chat, GetChatHistory                                    | **Bi-directional Streaming** |
+### 2. Event-Driven UI
+Antarmuka bereaksi secara dinamis terhadap pesan dari server:
+*   **Map Live Update**: Marker pengemudi bergerak, berotasi, dan berganti ikon (Motor/Mobil) secara instan.
+*   **Status Indicators**: Badge status pesanan (PENDING, ACCEPTED, IN_PROGRESS) diperbarui secara real-time.
+*   **Earnings & Feed**: Di sisi Driver, komponen "Pendapatan Hari Ini" dan histori pesanan diperbarui otomatis begitu ada tip atau ulasan masuk.
 
-## Cara Menjalankan
-
-### 1. Install Dependencies
-
-```bash
-# Server
-cd server && npm install
-
-# Gateway
-cd ../gateway && npm install
-
-# Client
-cd ../jalanyuk-client && npm install
-```
-
-### 2. Jalankan Server (Terminal 1)
-
-```bash
-cd server
-node index.js
-```
-
-Server berjalan di `gRPC://localhost:50051`
-
-### 3. Jalankan Gateway (Terminal 2)
-
-```bash
-cd gateway
-node index.js
-```
-
-Gateway berjalan di `http://localhost:3000`
-
-### 4. Jalankan Frontend (Terminal 3)
-
-```bash
-cd jalanyuk-client
-npm run dev
-```
-
-Frontend berjalan di `http://localhost:5173`
+### 3. Server-Initiated Events
+Server mendorong data secara proaktif tanpa permintaan eksplisit dari klien:
+*   **Surge Pricing Alerts**: Notifikasi otomatis "Harga berubah" saat permintaan tinggi disimulasikan.
+*   **Tip Notifications**: Driver menerima pemberitahuan instan begitu Customer memberikan tip dan rating.
 
 ---
 
-## Alur Demo
+## 🛠️ Tech Stack
 
-1. 👤 **Customer**: Register → Login → Pilih titik jemput & tujuan di map
-2. ➕ Tambah waypoints untuk client-side streaming demo
-3. 💰 Server kalkulasi harga dengan Haversine formula
-4. 🚗 **Driver** (tab baru): Register → Login → Lihat pending rides
-5. ✅ Driver accept ride → Customer menerima notifikasi
-6. 📡 **Server-streaming**: Driver bergerak di map customer real-time
-7. 💬 **Bidi-streaming**: Customer ↔ Driver chat
-8. 🏁 Driver complete rideJ
+| Layer     | Teknologi                                           |
+| --------- | --------------------------------------------------- |
+| **Protocol**  | gRPC (`@grpc/grpc-js`, `proto3`)                    |
+| **Backend**   | Node.js gRPC Server                                 |
+| **Middleware**| Express.js REST + WebSocket Bridge                  |
+| **Frontend**  | React (Vite) + Leaflet.js + Lucide Icons            |
+| **Database**  | SQLite (WASM-based for zero-native dependencies)    |
+| **Routing**   | OSRM (Open Source Routing Machine) API              |
 
-## Project Structure
+---
 
+## 📂 gRPC Services
+
+| Service             | RPCs                                                    | Deskripsi Alur                               |
+| ------------------- | ------------------------------------------------------- | -------------------------------------------- |
+| **AuthService**     | Register, Login, Logout                                 | Autentikasi berbasis session token.          |
+| **LocationService** | ListLocations, GetPricing, SearchLocation               | Pencarian via Nominatim & Kalkulasi Harga.   |
+| **RideService**     | RequestRide, GetRideStatus, ListRides, CancelRide, RateRide | **Client-Streaming** untuk input waypoints. |
+| **DriverService**   | TrackDriver, AcceptRide, PickupRide, CompleteRide       | **Server-Streaming** untuk GPS tracking.    |
+| **ChatService**     | Chat, GetChatHistory                                    | **Bidi-Streaming** untuk obrolan langsung.  |
+
+---
+
+## ⚙️ Cara Menjalankan
+
+### 1. Persiapan Dependencies
+```bash
+# Install di root (opsional) atau tiap folder
+npm install --prefix server
+npm install --prefix gateway
+npm install --prefix jalanyuk-client
 ```
-jalanyuk/
-├── proto/           # 5 Proto Definitions
-├── server/          # gRPC Server (Node.js)
-│   ├── db/          # SQLite schema + seed
-│   ├── services/    # 5 gRPC service implementations
-│   └── utils/       # Pricing + simulation
-├── gateway/         # Express REST→gRPC bridge (HTTP + WebSocket)
-└── jalanyuk-client/ # React (Vite) + Leaflet.js Frontend
+
+### 2. Jalankan Layanan
+Disarankan menggunakan 3 terminal terpisah:
+
+**Terminal 1: gRPC Server**
+```bash
+cd server && node index.js
 ```
+*Berjalan di port 50051*
+
+**Terminal 2: API Gateway (Express)**
+```bash
+cd gateway && node index.js
+```
+*Berjalan di port 3000 (HTTP & WebSocket)*
+
+**Terminal 3: Frontend (React)**
+```bash
+cd jalanyuk-client && npm run dev
+```
+*Akses via http://localhost:5173*
+
+---
+
+## 📋 Alur Penggunaan (Demo)
+
+1.  **Pemesanan**: Customer login, cari lokasi, tambahkan waypoints (streaming demo), pilih kendaraan (Motor/Mobil), lalu pesan.
+2.  **Penerimaan**: Driver melihat daftar pesanan secara real-time melalui WebSocket push, lalu tekan **"Ambil Ride"**.
+3.  **Pickup**: Driver menekan **"Jemput Penumpang"**. Browser mengirim instruksi via WS untuk memulai gRPC tracking stream.
+4.  **Live Tracking**: Perhatikan marker di map bergerak mengikuti rute jalan asli (via OSRM). Customer & Driver bisa saling chat.
+5.  **Selesai & Tip**: Setelah sampai, Driver menekan **"Selesaikan Ride"**. Customer memberi rating dan tip. Driver akan menerima notifikasi tip secara instan di sisi mereka.
+6.  **Histori**: Driver dapat memeriksa tab **"Histori"** untuk melihat akumulasi pendapatan harian yang diperbarui secara dinamis.
+
+---
+*Dibuat dengan ❤️ untuk tugas Mata Kuliah Integrasi Sistem.*

@@ -30,6 +30,7 @@ message GetPricingRequest {
     Coordinate origin = 1;
     Coordinate destination = 2;
     repeated Coordinate waypoints = 3;
+    string service_type = 4;
 }
 
 message GetPricingResponse {

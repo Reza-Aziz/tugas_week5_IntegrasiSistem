@@ -106,6 +106,9 @@ function initSchema() {
       dropoff_location_id TEXT NOT NULL REFERENCES locations(id),
       status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','IN_PROGRESS','COMPLETED','CANCELLED')),
       total_price REAL DEFAULT 0,
+      service_type TEXT DEFAULT 'STANDARD',
+      rating INTEGER,
+      tip REAL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );

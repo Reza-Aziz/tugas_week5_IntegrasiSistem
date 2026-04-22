@@ -46,7 +46,7 @@ function createPulseIcon() {
 const pickupIcon = () => createIcon('📍', 36);
 const dropoffIcon = () => createIcon('🏁', 36);
 const waypointIcon = () => createIcon('⭕', 28);
-const driverIcon = () => createIcon('🚗', 40);
+const driverIcon = (vehicleType) => createIcon(vehicleType === 'MOTOR' ? '🏍️' : '🚗', 40);
 const locationIcon = () => createIcon('📌', 28);
 
 // Sub-component to pan to new center without changing zoom
@@ -67,6 +67,7 @@ export function RideMap({
   dropoff = null,
   waypoints = [],
   driverPos = null,
+  driverVehicle = 'STANDARD',
   flyTo = null,
 }) {
   const [osrmRoute, setOsrmRoute] = useState([]);
@@ -162,8 +163,8 @@ export function RideMap({
 
       {/* Driver Marker */}
       {driverPos && (
-        <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon()}>
-          <Popup>🚗 Driver sedang bergerak<br />Speed: {Math.round(driverPos.speed || 0)} km/h</Popup>
+        <Marker position={[driverPos.lat, driverPos.lng]} icon={driverIcon(driverVehicle)}>
+          <Popup>{driverVehicle === 'MOTOR' ? '🏍️' : '🚗'} Driver sedang bergerak<br />Speed: {Math.round(driverPos.speed || 0)} km/h</Popup>
         </Marker>
       )}
     </MapContainer>

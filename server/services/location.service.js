@@ -22,7 +22,7 @@ function listLocations(call, callback) {
 }
 
 async function getPricing(call, callback) {
-  const { origin, destination, waypoints = [] } = call.request;
+  const { origin, destination, waypoints = [], service_type = 'STANDARD' } = call.request;
   try {
     if (!origin || !destination) {
       return callback({
@@ -62,16 +62,22 @@ async function getPricing(call, callback) {
 
     const { PRICING } = require('../utils/pricing');
     const nWaypoints = waypoints.length;
-    const fare =
-      PRICING.BASE_FARE +
-      distanceKm * PRICING.PER_KM +
-      nWaypoints * PRICING.WAYPOINT_SURCHARGE;
+    
+    let fareMultiplier = 1.0;
+    let minFare = PRICING.MIN_FARE;
+
+    if (service_type === 'MOTOR') {
+       fareMultiplier = 0.6;
+       minFare = PRICING.MOTOR_MIN_FARE;
+    }
+
+    const fare = (PRICING.BASE_FARE + distanceKm * PRICING.PER_KM + nWaypoints * PRICING.WAYPOINT_SURCHARGE) * fareMultiplier;
 
     callback(null, {
       distance_km: Math.round(distanceKm * 100) / 100,
       base_price: PRICING.BASE_FARE,
       waypoint_surcharge: nWaypoints * PRICING.WAYPOINT_SURCHARGE,
-      total_price: Math.max(fare, PRICING.MIN_FARE),
+      total_price: Math.max(fare, minFare),
       currency: 'IDR',
     });
   } catch (err) {
@@ -139,8 +145,24 @@ async function searchLocation(call, callback) {
 
     callback(null, { results });
   } catch (err) {
-    console.error('[Location] Nominatim search error:', err);
-    callback({ code: grpc.status.INTERNAL, message: 'Internal server error during search' });
+    console.error('[Location] Nominatim search error:', err.message);
+    try {
+      // Fallback ke pencarian lokal di database
+      const localResults = db.prepare(
+        "SELECT * FROM locations WHERE name LIKE ? OR address LIKE ? LIMIT 5"
+      ).all(`%${query}%`, `%${query}%`);
+      
+      const results = localResults.map((row) => ({
+        id: row.id,
+        name: row.name,
+        address: row.address,
+        coord: { lat: row.lat, lng: row.lng },
+        category: row.category
+      }));
+      return callback(null, { results });
+    } catch (e) {
+      return callback(null, { results: [] });
+    }
   }
 }
 

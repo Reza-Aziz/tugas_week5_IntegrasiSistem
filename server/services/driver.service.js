@@ -90,28 +90,42 @@ async function trackDriver(call) {
     await new Promise(r => setTimeout(r, 2000)); // Passenger boarding time
 
     // PHASE 2: To Dropoff
+    console.log(`[Driver] Ride ${ride_id} starting Phase 2: To Dropoff`);
     const routeToDropoff = await fetchOSRMRoute([pickup, ...waypoints, dropoff]);
     if (stateObj.cancelled) return;
-    await runSimulationPhase(routeToDropoff, onUpdate, 300, stateObj);
+    
+    if (!routeToDropoff || routeToDropoff.length === 0) {
+      console.warn(`[Driver] No route found for Phase 2 of ride ${ride_id}, skipping to dropoff`);
+    } else {
+      await runSimulationPhase(routeToDropoff, onUpdate, 300, stateObj);
+    }
 
     if (stateObj.cancelled) return;
-    console.log(`[Driver] Ride ${ride_id} reached dropoff. Waiting for completion...`);
+    console.log(`[Driver] Ride ${ride_id} reached dropoff. Phase 3: Waiting for completion...`);
     
     // PHASE 3: Waiting for Driver to complete manually
-    stateObj.interval = setInterval(() => {
-      onUpdate({
-        lat: dropoff.lat,
-        lng: dropoff.lng,
-        heading: 0,
-        speed: 0,
-        timestamp: new Date().toISOString()
-      });
-      const currentRide = db.prepare('SELECT status FROM rides WHERE id = ?').get(ride_id);
-      if (currentRide && ['COMPLETED', 'CANCELLED'].includes(currentRide.status)) {
-         clearInterval(stateObj.interval);
-         try { call.end(); } catch (e) {}
-      }
-    }, 3000);
+    // We must keep the function alive (awaiting) so the gRPC stream doesn't end automatically
+    await new Promise((resolve) => {
+      stateObj.interval = setInterval(() => {
+        onUpdate({
+          lat: dropoff.lat,
+          lng: dropoff.lng,
+          heading: 0,
+          speed: 0,
+          timestamp: new Date().toISOString()
+        });
+        
+        const currentRide = db.prepare('SELECT status FROM rides WHERE id = ?').get(ride_id);
+        if (stateObj.cancelled || (currentRide && ['COMPLETED', 'CANCELLED'].includes(currentRide.status))) {
+           clearInterval(stateObj.interval);
+           if (!stateObj.cancelled) {
+             console.log(`[Driver] Ride ${ride_id} finished Phase 3 with status ${currentRide.status}`);
+             try { call.end(); } catch (e) {}
+           }
+           resolve();
+        }
+      }, 3000);
+    });
   } catch (err) {
     console.error('Simulation error:', err);
   }
@@ -170,6 +184,7 @@ function acceptRide(call, callback) {
       dropoff_lat: ride.dropoff_lat,
       dropoff_lng: ride.dropoff_lng,
       waypoints: dbWaypoints.map((w) => ({ lat: w.lat, lng: w.lng, name: w.name || '' })),
+      service_type: ride.service_type || 'STANDARD',
     });
   } catch (err) {
     console.error('[Driver] acceptRide error:', err);
@@ -225,7 +240,7 @@ async function listPendingRides(call, callback) {
     const rides = db.prepare(`
       SELECT r.id as ride_id, cu.username as customer_name,
              lp.name as pickup_name, ld.name as dropoff_name,
-             r.total_price,
+             r.total_price, r.service_type,
              lp.lat as pickup_lat, lp.lng as pickup_lng,
              ld.lat as dropoff_lat, ld.lng as dropoff_lng
       FROM rides r
@@ -267,6 +282,7 @@ async function listPendingRides(call, callback) {
         dropoff_name: r.dropoff_name,
         distance_km: Math.round(distanceKm * 100) / 100,
         total_price: r.total_price,
+        service_type: r.service_type,
       };
     }));
 

@@ -56,6 +56,7 @@ server.addService(rideProto.jalanyuk.ride.RideService.service, {
   GetRideStatus: rideService.getRideStatus,
   ListRides: rideService.listRides,
   CancelRide: rideService.cancelRide,
+  RateRide: rideService.rateRide,
 });
 
 server.addService(driverProto.jalanyuk.driver.DriverService.service, {

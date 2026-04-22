@@ -7,6 +7,7 @@ service RideService {
     rpc GetRideStatus (GetRideStatusRequest) returns (GetRideStatusResponse);
     rpc ListRides (ListRidesRequest) returns (ListRidesResponse);
     rpc CancelRide (CancelRideRequest) returns (CancelRideResponse);
+    rpc RateRide (RateRideRequest) returns (RateRideResponse);
 }
 
 message RideRequest {
@@ -21,6 +22,7 @@ message RideMetadata {
     string pickup_location_id = 2;
     string dropoff_location_id = 3;
     double surge_multiplier = 4;
+    string service_type = 5;
 }
 
 message Waypoint {
@@ -53,6 +55,9 @@ message GetRideStatusResponse {
     double dropoff_lat = 8;
     double dropoff_lng = 9;
     repeated Waypoint waypoints = 10;
+    string service_type = 11;
+    int32 rating = 12;
+    double tip = 13;
 }
 
 message ListRidesRequest {
@@ -70,6 +75,9 @@ message RideSummary {
     string status = 4;
     double total_price = 5;
     string created_at = 6;
+    string service_type = 7;
+    int32 rating = 8;
+    double tip = 9;
 }
 
 message CancelRideRequest {
@@ -79,4 +87,16 @@ message CancelRideRequest {
 
 message CancelRideResponse {
     string message = 1;
+}
+
+message RateRideRequest {
+    string ride_id = 1;
+    string session_token = 2;
+    int32 rating = 3;
+    double tip = 4;
+}
+
+message RateRideResponse {
+    string message = 1;
+    string driver_id = 2;
 }

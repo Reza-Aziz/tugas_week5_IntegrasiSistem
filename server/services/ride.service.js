@@ -17,12 +17,14 @@ function requestRide(call, callback) {
   const waypoints = [];
   let waypointOrder = 0;
   let surgeMultiplier = 1.0;
+  let serviceType = 'STANDARD';
 
   call.on('data', (message) => {
     try {
       if (message.payload === 'metadata') {
         const meta = message.metadata;
         surgeMultiplier = meta.surge_multiplier || 1.0;
+        serviceType = meta.service_type || 'STANDARD';
         const user = validateToken(meta.session_token);
         if (!user || user.role !== 'CUSTOMER') {
           call.destroy(new Error('UNAUTHENTICATED'));
@@ -55,11 +57,11 @@ function requestRide(call, callback) {
         }
 
         db.prepare(
-          `INSERT INTO rides (id, customer_id, pickup_location_id, dropoff_location_id, status, total_price)
-           VALUES (?, ?, ?, ?, 'PENDING', 0)`
-        ).run(rideId, customerId, meta.pickup_location_id, meta.dropoff_location_id);
+          `INSERT INTO rides (id, customer_id, pickup_location_id, dropoff_location_id, status, total_price, service_type)
+           VALUES (?, ?, ?, ?, 'PENDING', 0, ?)`
+        ).run(rideId, customerId, meta.pickup_location_id, meta.dropoff_location_id, serviceType);
 
-        console.log(`[Ride] New ride ${rideId} initiated by ${user.username}`);
+        console.log(`[Ride] New ride ${rideId} initiated by ${user.username} (${serviceType})`);
 
       } else if (message.payload === 'waypoint') {
         if (!rideId) return; // metadata not received yet
@@ -116,14 +118,23 @@ function requestRide(call, callback) {
         distanceKm = pricing.distance_km;
       }
 
+      // Adjust fare based on service type. For MOTOR, maybe standard fare is 40% cheaper
+      let fareMultiplier = 1.0;
       const { PRICING } = require('../utils/pricing');
-      const fare = PRICING.BASE_FARE + distanceKm * PRICING.PER_KM + waypoints.length * PRICING.WAYPOINT_SURCHARGE;
-      const totalPrice = Math.max(fare, PRICING.MIN_FARE) * surgeMultiplier;
+      let minFare = PRICING.MIN_FARE;
+
+      if (serviceType === 'MOTOR') {
+         fareMultiplier = 0.6;
+         minFare = PRICING.MOTOR_MIN_FARE;
+      }
+      
+      const fare = (PRICING.BASE_FARE + distanceKm * PRICING.PER_KM + waypoints.length * PRICING.WAYPOINT_SURCHARGE) * fareMultiplier;
+      const totalPrice = Math.max(fare, minFare) * surgeMultiplier;
 
       db.prepare("UPDATE rides SET total_price = ?, updated_at = datetime('now') WHERE id = ?")
         .run(totalPrice, rideId);
 
-      console.log(`[Ride] ${rideId} priced: Rp${totalPrice} (${distanceKm.toFixed(2)} km, ${waypoints.length} waypoints)`);
+      console.log(`[Ride] ${rideId} priced: Rp${totalPrice} (${distanceKm.toFixed(2)} km, ${waypoints.length} waypoints, Type: ${serviceType})`);
 
       callback(null, {
         ride_id: rideId,
@@ -180,6 +191,9 @@ function getRideStatus(call, callback) {
       pickup_lng: ride.pickup_lng,
       dropoff_lat: ride.dropoff_lat,
       dropoff_lng: ride.dropoff_lng,
+      service_type: ride.service_type || 'STANDARD',
+      rating: ride.rating || 0,
+      tip: ride.tip || 0,
       waypoints: waypoints.map(w => ({ lat: w.lat, lng: w.lng, name: w.name || '' }))
     });
   } catch (err) {
@@ -199,7 +213,7 @@ function listRides(call, callback) {
 
     const rides = db.prepare(`
       SELECT r.id as ride_id, lp.name as pickup_name, ld.name as dropoff_name,
-             r.status, r.total_price, r.created_at
+             r.status, r.total_price, r.created_at, r.service_type, r.rating, r.tip
       FROM rides r
       JOIN locations lp ON lp.id = r.pickup_location_id
       JOIN locations ld ON ld.id = r.dropoff_location_id
@@ -208,7 +222,11 @@ function listRides(call, callback) {
       LIMIT 20
     `).all(user.id, user.id);
 
-    callback(null, { rides });
+    callback(null, { rides: rides.map(r => ({
+      ...r,
+      rating: r.rating || 0,
+      tip: r.tip || 0
+    })) });
   } catch (err) {
     callback({ code: grpc.status.INTERNAL, message: 'Internal server error' });
   }
@@ -250,4 +268,41 @@ function cancelRide(call, callback) {
   }
 }
 
-module.exports = { requestRide, getRideStatus, listRides, cancelRide };
+function rateRide(call, callback) {
+  const db = getDb();
+  const { ride_id, session_token, rating, tip } = call.request;
+
+  console.log(`[Ride] rateRide request: ride_id=${ride_id}, rating=${rating}, tip=${tip}`);
+
+  try {
+    const user = validateToken(session_token);
+    if (!user) {
+      console.warn(`[Ride] rateRide failed: Invalid session`);
+      return callback({ code: grpc.status.UNAUTHENTICATED, message: 'Session tidak valid' });
+    }
+
+    const ride = db.prepare('SELECT * FROM rides WHERE id = ?').get(ride_id);
+    if (!ride) {
+      console.warn(`[Ride] rateRide failed: Ride ${ride_id} not found`);
+      return callback({ code: grpc.status.NOT_FOUND, message: 'Ride tidak ditemukan' });
+    }
+
+    if (ride.customer_id !== user.id) {
+      console.warn(`[Ride] rateRide failed: User ${user.username} not authorized for ride ${ride_id}`);
+      return callback({ code: grpc.status.PERMISSION_DENIED, message: 'Tidak berwenang, bukan penumpang ride ini' });
+    }
+
+    const result = db.prepare(
+      "UPDATE rides SET rating = ?, tip = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(rating, tip, ride_id);
+
+    console.log(`[Ride] rateRide success for ${ride_id}. Changes: ${result.changes}`);
+
+    callback(null, { message: 'Review dan tip berhasil dikirim!', driver_id: ride.driver_id || '' });
+  } catch (err) {
+    console.error('[Ride] rateRide error:', err);
+    callback({ code: grpc.status.INTERNAL, message: 'Internal server error saat rate ride' });
+  }
+}
+
+module.exports = { requestRide, getRideStatus, listRides, cancelRide, rateRide };

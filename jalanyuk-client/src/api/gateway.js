@@ -43,6 +43,7 @@ export const rideApi = {
   listRides: (token) => apiFetch('/api/rides', {}, token),
   getRide: (id, token) => apiFetch(`/api/rides/${id}`, {}, token),
   cancelRide: (id, token) => apiFetch(`/api/rides/${id}`, { method: 'DELETE' }, token),
+  rateRide: (id, token, rating, tip) => apiFetch(`/api/rides/${id}/rate`, { method: 'POST', body: JSON.stringify({ rating, tip }) }, token),
 };
 
 // ─── Driver ─────────────────────────────────────────────────────────────────
@@ -145,9 +146,9 @@ export class ChatWebSocket {
 
 // ─── Global Events ──────────────────────────────────────────────────────────
 
-export function connectGlobalEvents({ token, role, onSurge, onRideStatus, onPendingRides }) {
-  const WS_EVENTS_URL = import.meta.env.VITE_WS_EVENTS_URL || 'ws://localhost:3000/ws/events';
-  const ws = new WebSocket(WS_EVENTS_URL);
+  export function connectGlobalEvents({ token, role, onSurge, onRideStatus, onPendingRides, onTipReceived }) {
+    const WS_EVENTS_URL = import.meta.env.VITE_WS_EVENTS_URL || 'ws://localhost:3000/ws/events';
+    const ws = new WebSocket(WS_EVENTS_URL);
 
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: 'AUTH', session_token: token, role }));
@@ -159,6 +160,7 @@ export function connectGlobalEvents({ token, role, onSurge, onRideStatus, onPend
       if (msg.type === 'SURGE_UPDATE') onSurge?.(msg.multiplier);
       if (msg.type === 'RIDE_STATUS') onRideStatus?.(msg.ride);
       if (msg.type === 'PENDING_RIDES') onPendingRides?.(msg.rides);
+      if (msg.type === 'TIP_RECEIVED') onTipReceived?.(msg);
     } catch {}
   };
 
